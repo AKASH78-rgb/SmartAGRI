@@ -1,25 +1,73 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "@/contexts/AppContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Check } from "lucide-react";
 import { motion } from "framer-motion";
 
 const languages = [
-  { code: "en" as const, name: "English", native: "English", flag: "🇬🇧" },
-  { code: "hi" as const, name: "Hindi", native: "हिंदी", flag: "🇮🇳" },
-  { code: "te" as const, name: "Telugu", native: "తెలుగు", flag: "🇮🇳" },
-  { code: "kn" as const, name: "Kannada", native: "ಕನ್ನಡ", flag: "🇮🇳" },
-  { code: "mr" as const, name: "Marathi", native: "मराठी", flag: "🇮🇳" },
+  {
+    code: "en" as const,
+    name: "English",
+    native: "English",
+    badge: "A",           // Latin A
+    badgeSub: "EN",
+    color: "bg-blue-100 text-blue-700",
+  },
+  {
+    code: "hi" as const,
+    name: "Hindi",
+    native: "हिंदी",
+    badge: "अ",           // Devanagari 'a'
+    badgeSub: "HI",
+    color: "bg-orange-100 text-orange-700",
+  },
+  {
+    code: "te" as const,
+    name: "Telugu",
+    native: "తెలుగు",
+    badge: "అ",           // Telugu 'a'
+    badgeSub: "TE",
+    color: "bg-green-100 text-green-700",
+  },
+  {
+    code: "kn" as const,
+    name: "Kannada",
+    native: "ಕನ್ನಡ",
+    badge: "ಅ",           // Kannada 'a'
+    badgeSub: "KN",
+    color: "bg-purple-100 text-purple-700",
+  },
+  {
+    code: "mr" as const,
+    name: "Marathi",
+    native: "मराठी",
+    badge: "म",           // Devanagari 'ma' (first letter of मराठी)
+    badgeSub: "MR",
+    color: "bg-red-100 text-red-700",
+  },
 ];
 
 const Language = () => {
   const { language, setLanguage } = useApp();
   const [selected, setSelected] = useState(language);
   const navigate = useNavigate();
+  const { isAuthenticated, isValidating } = useAuth();
+
+  // If already logged in, skip to dashboard
+  useEffect(() => {
+    if (!isValidating && isAuthenticated) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [isAuthenticated, isValidating, navigate]);
 
   const handleContinue = () => {
     setLanguage(selected);
-    navigate("/auth");
+    if (isAuthenticated) {
+      navigate("/dashboard");
+    } else {
+      navigate("/auth");
+    }
   };
 
   return (
@@ -40,11 +88,17 @@ const Language = () => {
                 selected === lang.code ? "border-accent bg-accent/5" : "border-transparent"
               }`}
             >
-              <span className="text-3xl">{lang.flag}</span>
+              {/* Language badge — native script letter + code */}
+              <div className={`flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl ${lang.color}`}>
+                <span className="text-lg font-bold leading-none">{lang.badge}</span>
+                <span className="text-[9px] font-semibold leading-none mt-0.5 tracking-wide opacity-70">{lang.badgeSub}</span>
+              </div>
+
               <div className="flex-1">
                 <p className="font-semibold text-foreground">{lang.native}</p>
                 <p className="text-sm text-muted-foreground">{lang.name}</p>
               </div>
+
               {selected === lang.code && (
                 <div className="flex h-6 w-6 items-center justify-center rounded-full bg-accent">
                   <Check className="h-4 w-4 text-accent-foreground" />

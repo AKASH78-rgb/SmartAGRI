@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useApp } from "@/contexts/AppContext";
 import { authAPI } from "@/services/api";
 import { t } from "@/lib/i18n";
-import { Mail, Lock, User, Eye, EyeOff, ArrowLeft, KeyRound } from "lucide-react";
+import { Mail, Lock, User, Eye, EyeOff, ArrowLeft, KeyRound, Phone } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -20,6 +20,7 @@ const loginSchema = z.object({
 const signupSchema = z.object({
   name: z.string().min(2, "Name required"),
   email: z.string().email("Invalid email"),
+  phone: z.string().optional().refine(v => !v || /^\d{10}$/.test(v.replace(/\D/g, '').slice(-10)), { message: "Enter a valid 10-digit phone number" }),
   password: z.string().min(6, "Minimum 6 characters"),
   confirmPassword: z.string(),
 }).refine(d => d.password === d.confirmPassword, { message: "Passwords don't match", path: ["confirmPassword"] });
@@ -37,9 +38,16 @@ const Auth = () => {
   const [resetLoading, setResetLoading] = useState(false);
   const [authError, setAuthError] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
-  const { login, signup } = useAuth();
+  const { login, signup, isAuthenticated, isValidating } = useAuth();
   const { language } = useApp();
   const navigate = useNavigate();
+
+  // Redirect already-authenticated users away from /auth
+  useEffect(() => {
+    if (!isValidating && isAuthenticated) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, isValidating, navigate]);
 
   const loginForm = useForm<LoginForm>({ resolver: zodResolver(loginSchema) });
   const signupForm = useForm<SignupForm>({ resolver: zodResolver(signupSchema) });
@@ -64,7 +72,7 @@ const Auth = () => {
     setAuthError("");
     setAuthLoading(true);
     try {
-      await signup(data.name, data.email, data.password);
+      await signup(data.name, data.email, data.password, data.phone || "");
       navigate("/dashboard", { replace: true });
     } catch (err: any) {
       setAuthError(err?.message || "Signup failed");
@@ -227,6 +235,8 @@ const Auth = () => {
                   {signupForm.formState.errors.name && <p className="text-xs text-destructive -mt-2">{signupForm.formState.errors.name.message}</p>}
                   <div className="relative"><Mail className={iconCls} /><input {...signupForm.register("email")} placeholder="Email" aria-label="Email address" className={inputCls} /></div>
                   {signupForm.formState.errors.email && <p className="text-xs text-destructive -mt-2">{signupForm.formState.errors.email.message}</p>}
+                  <div className="relative"><Phone className={iconCls} /><input {...signupForm.register("phone")} inputMode="tel" placeholder="Phone (optional)" aria-label="Phone number" className={inputCls} /></div>
+                  {signupForm.formState.errors.phone && <p className="text-xs text-destructive -mt-2">{signupForm.formState.errors.phone.message}</p>}
                   <div className="relative">
                     <Lock className={iconCls} />
                     <input {...signupForm.register("password")} type={showPw ? "text" : "password"} placeholder="Password" aria-label="Password" className={inputCls} />

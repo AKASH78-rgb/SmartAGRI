@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
+import diseaseHero from "/crop.jpg";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -114,14 +115,6 @@ const DiseaseDetection = () => {
   const [saved, setSaved] = useState(false);
   const [cameraPermDenied, setCameraPermDenied] = useState(false);
 
-  // ML status
-  interface MlStatus {
-    available: boolean; modelReady: boolean; status: "ready" | "degraded" | "offline";
-    reason?: string; message: string; model?: string; classes?: number; valAcc?: string;
-  }
-  const [mlStatus, setMlStatus] = useState<MlStatus | null>(null);
-  const [mlStatusLoading, setMlStatusLoading] = useState(true);
-
   // ── Refs ──
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -157,19 +150,6 @@ const DiseaseDetection = () => {
       videoRef.current.play().catch(() => {});
     }
   }, [flowStep]);
-
-  // ── ML service status ──
-  useEffect(() => {
-    let cancelled = false;
-    setMlStatusLoading(true);
-    diseaseAPI.getServiceStatus()
-      .then((s: any) => { if (!cancelled) setMlStatus(s); })
-      .catch(() => {
-        if (!cancelled) setMlStatus({ available: false, modelReady: false, status: "offline", message: "Could not reach disease detection engine." });
-      })
-      .finally(() => { if (!cancelled) setMlStatusLoading(false); });
-    return () => { cancelled = true; };
-  }, []);
 
   // ────────────────────────────────────────────────────────────────────────────
   // Step 1 — Open camera
@@ -403,6 +383,12 @@ const DiseaseDetection = () => {
   // ════════════════════════════════════════════════════════════════════════════
   return (
     <MobileLayout>
+      {/* Hero background */}
+      <div className="relative">
+        <img src={diseaseHero} alt="" className="absolute inset-x-0 top-0 h-48 w-full object-cover" />
+        <div className="absolute inset-x-0 top-0 h-48 bg-gradient-to-b from-background/10 via-background/60 to-background" />
+      </div>
+
       {/* ── Hidden elements ── */}
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileInput} />
       <canvas ref={canvasRef} className="hidden" />
@@ -472,37 +458,12 @@ const DiseaseDetection = () => {
       </AnimatePresence>
 
       {/* ── Page content ── */}
-      <div className="px-5 pt-6 pb-24">
+      <div className="px-5 pt-4 relative z-10 pb-24">
         <h1 className="text-xl font-bold text-foreground mb-0.5">{t("disease_detection", language)}</h1>
         <p className="text-sm text-muted-foreground mb-4">{t("upload_diagnose", language)}</p>
 
         {/* Step indicator */}
         {flowStep !== "idle" && <StepIndicator step={flowStep} />}
-
-        {/* ── ML status banner ── */}
-        <div className={`mb-4 rounded-2xl border p-3 flex items-start gap-2.5 ${
-          mlStatusLoading ? "bg-muted/50 border-border" :
-          mlStatus?.status === "ready" ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-900" :
-          mlStatus?.status === "degraded" ? "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900" :
-          "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900"
-        }`}>
-          {mlStatusLoading ? (
-            <><div className="mt-0.5 h-4 w-4 rounded-full bg-current opacity-40 animate-pulse text-muted-foreground shrink-0" />
-            <p className="text-sm font-medium text-muted-foreground">Checking detection engine…</p></>
-          ) : mlStatus?.status === "ready" ? (
-            <><CheckCircle className="h-5 w-5 mt-0.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-            <div><p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">Detection engine ready</p>
-            <p className="text-xs mt-0.5 text-emerald-700/80 dark:text-emerald-400/70">18 classes · Paddy, Cotton, Corn, Sugarcane · 98.94% accuracy</p></div></>
-          ) : mlStatus?.status === "degraded" ? (
-            <><AlertTriangle className="h-5 w-5 mt-0.5 text-amber-600 dark:text-amber-400 shrink-0" />
-            <div><p className="text-sm font-semibold text-amber-800 dark:text-amber-300">Model warming up</p>
-            <p className="text-xs mt-0.5 text-amber-700/90 dark:text-amber-400/80">{mlStatus.message}</p></div></>
-          ) : (
-            <><ImageOff className="h-5 w-5 mt-0.5 text-red-600 dark:text-red-400 shrink-0" />
-            <div><p className="text-sm font-semibold text-red-800 dark:text-red-300">Detection engine offline</p>
-            <p className="text-xs mt-0.5 text-red-700/90 dark:text-red-400/80">{mlStatus?.message || "ML service on port 5001 is not running."}</p></div></>
-          )}
-        </div>
 
         {/* ══════════════════════════════════════════════════════════════
             STEP: IDLE — Take Photo / Upload
@@ -571,7 +532,7 @@ const DiseaseDetection = () => {
                     <ul className="text-xs text-muted-foreground space-y-1 list-disc pl-4">
                       <li>Close-up of the <strong>affected leaf only</strong></li>
                       <li>Good natural lighting — avoid shadows or flash</li>
-                      <li>Supported crops: <strong>Paddy, Cotton, Corn, Sugarcane</strong></li>
+                      <li>Supported crops: <strong>Tomato, Potato, Bell Pepper</strong></li>
                       <li>Max 10 MB · JPG or PNG</li>
                     </ul>
                   </div>

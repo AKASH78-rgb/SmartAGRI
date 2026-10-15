@@ -6,7 +6,7 @@ This file provides guidance to AI assistants when working with code in this repo
 
 SmartAgriCare (SAC) is an AI-powered agriculture web app for Indian farmers in Andhra Pradesh. It is a **final year college project** with the following features:
 
-- **Disease Detection**: Swin-B Transformer model (98.94% accuracy, 18 classes across 4 crops: paddy, cotton, corn, sugarcane) with 4-layer OOD rejection
+- **Disease Detection**: TensorFlow PlantX MobileNetV2 model (`models/best_model.h5`, 15 classes: Tomato, Potato, Bell Pepper) with image-quality and confidence-based rejection
 - **Crop Recommendation**: Research-backed system using AP agro-climatic zone data (30 crops, district-specific varieties, ICAR/CRIDA data)
 - **Voice Assistant**: Multilingual farming advice (English, Hindi, Telugu) via triple LLM cascade (Groq → Gemini → SambaNova)
 - **Local Stores**: Find nearby agricultural stores via OpenStreetMap Overpass API
@@ -19,7 +19,7 @@ SmartAgriCare (SAC) is an AI-powered agriculture web app for Indian farmers in A
 smartagricare/
 ├── backend/              # Express.js REST API (port 5000)
 │   ├── index.js          # All routes, middleware, AP_CROPS database, LLM cascade
-│   ├── db.js             # SQLite (sql.js) with atomic writes, user/auth/report tables
+│   ├── db.js             # SQLite (sql.js) with atomic writes, user/auth/history tables
 │   ├── package.json      # bcryptjs, cors, dotenv, express, helmet, nodemailer, sql.js, undici
 │   └── .env              # API keys (GROQ, GEMINI, SAMBANOVA, SMTP) — gitignored
 ├── frontend/             # Vite + React + TypeScript web app (port 8080)
@@ -30,11 +30,13 @@ smartagricare/
 │       ├── services/     # api.ts (apiFetch with 401 auto-logout, retry wrapper)
 │       └── lib/          # i18n.ts (en/hi/te translations), tts.ts (Web Speech + Google TTS fallback)
 ├── ml-service/           # Flask ML API (port 5001)
-│   ├── app.py            # Swin-B model, 4-layer OOD rejection, CORS restricted to backend
+│   ├── app.py            # PlantX MobileNetV2 model, image quality and confidence checks
 │   └── requirements.txt  # torch, torchvision, timm, flask, flask-cors, numpy, Pillow
 ├── expo-app/             # Expo WebView wrapper (loads frontend URL on device)
-├── crop_disease_data.json # Disease treatment data for all 18 classes
-├── best_swin_crop_disease.pth # Trained Swin-B model checkpoint (~330MB)
+├── crop_disease_data.json # Disease treatment data for the supported crop catalog
+├── models/
+│   ├── best_model.h5
+│   └── class_indices_reverse.json
 ├── render.yaml           # Render deployment: web service + private ML service
 ├── start.bat             # Windows batch script to start all 3 services
 └── .gitignore            # .env, node_modules, __pycache__, *.pth, dist/
@@ -72,12 +74,14 @@ cd backend && npm start         # Serves API + frontend/dist/ static files
 |----------|--------|------|------------|-------------|
 | `/api/health` | GET | No | No | Health check |
 | `/api/auth/login` | POST | No | No | Login (email, password) |
-| `/api/auth/register` | POST | No | No | Register (name, email, password) |
+| `/api/auth/register` | POST | No | 30/min | Register (name, email, password, optional phone) |
 | `/api/auth/forgot-password` | POST | No | No | Send reset OTP via email |
 | `/api/auth/reset-password` | POST | No | 5/min | Reset password with OTP |
 | `/api/auth/validate` | POST | Yes | No | Validate auth token |
 | `/api/auth/profile` | PUT | Yes | No | Update profile (name, phone, location) |
 | `/api/auth/logout` | POST | Yes | No | Logout (delete token) |
+| `/api/soil/inquiry` | POST | Yes | No | Save farmer soil details to the user's history |
+| `/api/soil/inquiries` | GET | Yes | No | Get the authenticated user's soil inquiry history |
 | `/api/weather` | GET | No | 20/min | Weather + 7-day forecast (Open-Meteo) |
 | `/api/stores/nearby` | GET | No | 15/min | Nearby agri stores (Overpass API, 20s timeout) |
 | `/api/crop-meta` | GET | No | No | List AP districts + seasons |
@@ -98,14 +102,9 @@ cd backend && npm start         # Serves API + frontend/dist/ static files
 
 ## Key Technical Details
 
-### ML Model — 4-Layer OOD Rejection
+### ML Model — PlantX MobileNetV2
 
-The disease detection uses a Swin-B Transformer with 4 rejection layers to prevent false positives on non-plant images:
-
-1. **Color pre-check** (`is_plant_like()`): HSV plant-color ratio, green dominance, edge density, color variance
-2. **Energy-based OOD** (`compute_energy_score()`): Energy > -3.0 = out of distribution
-3. **Confidence + margin**: Top-1 < 0.75 OR (top-1 < 0.85 AND margin < 0.20) = reject
-4. **Healthy class skepticism**: Healthy predictions (indices 8,9,12) require color_variance < 0.02 AND confidence > 0.90
+The installed model classifies 15 Tomato, Potato, and Bell Pepper leaf conditions. The service rejects poor-quality images and predictions that do not meet its confidence, top-class margin, and entropy thresholds. The UI and API should not claim support for crops outside the model's class list.
 
 ### LLM Voice Assistant — Triple Cascade
 
@@ -148,11 +147,13 @@ Each provider has its own timeout and error handling. System prompt is farming-f
 - **All UI strings translated**: Crop recommendation, disease detection, stores, auth, profile, voice assistant
 - **TTS**: Web Speech API + Google Translate TTS proxy fallback for Hindi/Telugu
 
-### Database (SQLite via sql.js)
+### Database (SQLite via sql.js locally; MongoDB is opt-in)
 
-Tables: `users`, `disease_reports`, `password_reset_tokens`, `auth_tokens`
+Tables: `users`, `soil_inquiries`, `disease_reports`, `crop_recommendations`, `password_reset_tokens`, `auth_tokens`
 
-- Stored at `backend/smartagricare.db`
+- Stored at `backend/data/smartagricare.db` by default
+- Set `DATABASE_TYPE=mongodb` and `MONGODB_URI` to explicitly use MongoDB
+- `SMARTAGRICARE_DB_PATH` can override the SQLite file path (for isolated tests)
 - Atomic writes (write to `.tmp` then rename)
 - Auto-save every 60 seconds + debounced save on mutations
 - Flush on process exit
@@ -191,7 +192,7 @@ Static assets served with 7-day cache + immutable headers in production.
 1. Migrated voice assistant from Ollama to Gemini API
 2. Added Groq as primary LLM (free tier, fast)
 3. Implemented triple LLM cascade: Groq → Gemini → SambaNova
-4. Replaced mock ML service with real Swin-B Transformer model
+4. Replaced the placeholder ML service with the PlantX MobileNetV2 model
 5. Implemented 4-layer OOD rejection for non-plant images
 6. Fixed database reliability (atomic writes, debounced saves)
 7. Fixed backend stability (IPv4 forcing, fetch retries)

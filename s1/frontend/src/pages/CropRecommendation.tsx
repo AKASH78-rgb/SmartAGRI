@@ -1,11 +1,43 @@
 import React, { useState, useEffect } from "react";
-import { cropAPI } from "@/services/api";
+import { cropAPI, type CropRecommendationHistoryItem } from "@/services/api";
 import { useApp } from "@/contexts/AppContext";
 import { t, type Language } from "@/lib/i18n";
 import MobileLayout from "@/components/MobileLayout";
 import { toast } from "sonner";
 import { Maximize2, Clock, TrendingUp, Droplets, Check, ChevronDown, Leaf, Sprout, MapPin, FlaskConical, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import cropHero from "/crops-grow.jpg";
+
+// Crop image mapping - only crops that have images in the image/crops folder
+const getCropImage = (cropName: string): string => {
+  const cropImages: Record<string, string> = {
+    "Rice": "/rice.jpg",
+    "Paddy": "/rice.jpg",
+    "Cotton": "/cotton.jpg",
+    "Maize": "/maize.jpg",
+    "Corn": "/maize.jpg",
+    "Apple": "/apple.jpg",
+    "Banana": "/banana.jpg",
+    "Blackgram": "/blackgram.jpg",
+    "Chickpea": "/chickpea.jpg",
+    "Coconut": "/coconut.jpg",
+    "Coffee": "/coffee.jpg",
+    "Grapes": "/grapes.jpg",
+    "Jute": "/jute.jpg",
+    "Kidneybeans": "/kidneybeans.jpg",
+    "Lentil": "/lentil.jpg",
+    "Mango": "/mango.jpg",
+    "Mothbeans": "/mothbeans.jpg",
+    "Mungbean": "/mungbean.jpg",
+    "Muskmelon": "/muskmelon.jpg",
+    "Orange": "/orange.jpg",
+    "Papaya": "/papaya.jpg",
+    "Pigeonpeas": "/pigeonpeas.jpg",
+    "Pomegranate": "/pomegranate.jpg",
+    "Watermelon": "/watermelon.jpg",
+  };
+  return cropImages[cropName] || "/crop.jpg";
+};
 
 // Default AP soils — IDs stay English (sent to backend), labels are i18n keys
 const soilDefs = [
@@ -58,9 +90,10 @@ const CropCard = React.memo(({ crop, index, language, onSelect }: {
       onClick={() => onSelect(crop)}
       className="rounded-2xl bg-card shadow-card overflow-hidden text-left">
       <div className="relative h-24 overflow-hidden bg-gradient-to-br from-green-500/20 via-emerald-500/10 to-teal-500/20 flex items-center justify-center">
-        <span className="text-5xl drop-shadow-sm">{crop.emoji || '🌱'}</span>
+        <img src={getCropImage(crop.name)} alt={crop.name} className="absolute inset-0 h-full w-full object-cover opacity-30" />
+        <span className="relative text-5xl drop-shadow-sm">{crop.emoji || '🌱'}</span>
         <span className="absolute top-2 right-2 rounded-full bg-accent/90 px-2 py-0.5 text-[10px] font-bold text-accent-foreground">{crop.match}%</span>
-        <h3 className="absolute bottom-2 left-2 right-2 text-sm font-bold text-foreground leading-tight">{crop.name}</h3>
+        <h3 className="absolute bottom-2 left-2 right-2 text-sm font-bold text-foreground leading-tight drop-shadow-sm">{crop.name}</h3>
       </div>
       <div className="p-3 space-y-1.5">
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground"><Clock className="h-3 w-3 shrink-0" />{crop.period}</div>
@@ -84,12 +117,30 @@ const CropRecommendation = () => {
   const [districts, setDistricts] = useState<string[]>([]);
   const [showDistrictPicker, setShowDistrictPicker] = useState(false);
   const [selectedCrop, setSelectedCrop] = useState<CropResult | null>(null);
+  const [history, setHistory] = useState<CropRecommendationHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
-  // Fetch districts from backend on mount
+  const fetchHistory = async () => {
+    const token = localStorage.getItem('smartagricare_token');
+    if (!token) return;
+    setHistoryLoading(true);
+    try {
+      const data = await cropAPI.getHistory();
+      if (data?.success && Array.isArray(data.history)) {
+        setHistory(data.history);
+      }
+    } catch {
+      // History fetch failed — ignore (e.g. not authenticated)
+    }
+    setHistoryLoading(false);
+  };
+
+  // Fetch districts and history from backend on mount
   useEffect(() => {
     cropAPI.getMeta().then(data => {
       if (data?.districts) setDistricts(data.districts);
     }).catch(() => { });
+    fetchHistory();
   }, []);
 
   const handleSubmit = async () => {
@@ -110,6 +161,8 @@ const CropRecommendation = () => {
       } else {
         setCrops([]);
       }
+      // Refresh history after saving the new recommendation
+      fetchHistory();
     } catch {
       setCrops([]);
       toast.error("Failed to get crop recommendations. Please check your connection.");
@@ -123,7 +176,13 @@ const CropRecommendation = () => {
 
   return (
     <MobileLayout>
-      <div className="px-5 pt-6 pb-4">
+      {/* Hero background */}
+      <div className="relative">
+        <img src={cropHero} alt="" className="absolute inset-x-0 top-0 h-48 w-full object-cover" />
+        <div className="absolute inset-x-0 top-0 h-48 bg-gradient-to-b from-background/10 via-background/60 to-background" />
+      </div>
+
+      <div className="px-5 pt-4 relative z-10 pb-4">
         <h1 className="text-xl font-bold text-foreground mb-1">{t('crop_recommendation', language)}</h1>
         <p className="text-sm text-muted-foreground mb-5">{t('get_ai_suggestions', language)}</p>
 
@@ -314,9 +373,10 @@ const CropRecommendation = () => {
               className="w-full max-w-md max-h-[85vh] rounded-t-3xl bg-card shadow-elevated overflow-hidden flex flex-col"
             >
               {/* Crop hero */}
-              <div className="relative h-36 w-full shrink-0 bg-gradient-to-br from-green-500/20 via-emerald-500/10 to-teal-500/20 flex items-center justify-center">
-                <span className="text-7xl drop-shadow-sm">{selectedCrop.emoji || '🌱'}</span>
-                <div className="absolute bottom-3 left-4 right-4">
+              <div className="relative h-36 w-full shrink-0 bg-gradient-to-br from-green-500/20 via-emerald-500/10 to-teal-500/20 flex items-center justify-center overflow-hidden">
+                <img src={getCropImage(selectedCrop.name)} alt={selectedCrop.name} className="absolute inset-0 h-full w-full object-cover opacity-40" />
+                <span className="relative text-7xl drop-shadow-sm">{selectedCrop.emoji || '🌱'}</span>
+                <div className="absolute bottom-3 left-4 right-4 relative z-10">
                   <h2 className="text-xl font-bold text-foreground drop-shadow-sm">{selectedCrop.name}</h2>
                   <span className="inline-block mt-1 rounded-full bg-accent/90 px-2.5 py-0.5 text-xs font-bold text-accent-foreground">{selectedCrop.match}% {t('match', language)}</span>
                 </div>
@@ -407,6 +467,60 @@ const CropRecommendation = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* My Recommendations History */}
+      {history.length > 0 && (
+        <section className="px-4 pb-6 pt-2">
+          <div className="flex items-center gap-2 mb-3">
+            <Clock className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-bold text-foreground">My Recommendations</h2>
+            <span className="text-xs text-muted-foreground">({history.length})</span>
+          </div>
+          <div className="space-y-2.5">
+            {history.map((h) => {
+              const dt = new Date(h.createdAt);
+              const dateStr = isNaN(dt.getTime()) ? String(h.createdAt) : dt.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
+              return (
+                <div key={h.id} className="rounded-2xl border border-border bg-card p-3.5 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg leading-none">{h.results?.[0]?.emoji || '🌱'}</span>
+                        <span className="font-semibold text-foreground truncate">{h.topCrop || '—'}</span>
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                        <span>{h.season}</span>
+                        {h.soil && <span>• {h.soil}</span>}
+                        {h.district && <span>• {h.district}</span>}
+                        {h.land && <span>• {h.land} ac</span>}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-sm font-bold text-primary">{h.topMatch}%</div>
+                      <div className="text-[10px] text-muted-foreground">{dateStr}</div>
+                    </div>
+                  </div>
+                  {h.results && h.results.length > 1 && (
+                    <div className="mt-2.5 flex flex-wrap gap-1.5 border-t border-border pt-2">
+                      {h.results.slice(0, 5).map((r, i) => (
+                        <span key={`${h.id}-${i}`} className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-foreground">
+                          {r.emoji || ''} {r.name} {r.match}%
+                        </span>
+                      ))}
+                      {h.results.length > 5 && (
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">+{h.results.length - 5}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+      {historyLoading && history.length === 0 && (
+        <div className="px-4 pb-6 pt-2 text-center text-sm text-muted-foreground">Loading your recommendations…</div>
+      )}
     </MobileLayout>
   );
 };

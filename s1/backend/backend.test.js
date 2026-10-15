@@ -1,23 +1,33 @@
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert');
 const { spawn } = require('child_process');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
 const PORT = 5099;
 const BASE = `http://localhost:${PORT}`;
 
 let proc;
 let authToken;
+let tempDbDir;
 
 before(async () => {
+    tempDbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'smartagricare-test-'));
     proc = spawn(process.execPath, ['index.js'], {
         cwd: __dirname,
         stdio: 'pipe',
-        env: { ...process.env, PORT: String(PORT) },
+        env: {
+            ...process.env,
+            PORT: String(PORT),
+            DATABASE_TYPE: 'sqlite',
+            SMARTAGRICARE_DB_PATH: path.join(tempDbDir, 'smartagricare.db'),
+        },
     });
 
     // Wait for server to start
     await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error('Server startup timeout')), 8000);
+        const timeout = setTimeout(() => reject(new Error('Server startup timeout')), 30000);
         proc.stdout.on('data', (data) => {
             if (data.toString().includes('running on port')) {
                 clearTimeout(timeout);
@@ -30,8 +40,12 @@ before(async () => {
     });
 });
 
-after(() => {
-    if (proc) proc.kill();
+after(async () => {
+    if (proc && proc.exitCode === null) {
+        proc.kill();
+        await new Promise(resolve => proc.once('exit', resolve));
+    }
+    if (tempDbDir) fs.rmSync(tempDbDir, { recursive: true, force: true });
 });
 
 // ---------- Health ----------
@@ -83,11 +97,12 @@ describe('Auth', () => {
     it('POST /api/auth/login succeeds after register', async () => {
         // First register
         const email = `login${Date.now()}@test.com`;
-        await fetch(`${BASE}/api/auth/register`, {
+        const registerRes = await fetch(`${BASE}/api/auth/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: 'Login User', email, password: 'password123' }),
         });
+        const registered = await registerRes.json();
 
         // Then login
         const res = await fetch(`${BASE}/api/auth/login`, {
@@ -101,6 +116,7 @@ describe('Auth', () => {
         assert.ok(data.user);
         assert.ok(data.token);
         assert.strictEqual(data.user.email, email);
+        assert.strictEqual(data.user.id, registered.user.id);
         authToken = data.token; // Save for later tests
     });
 
@@ -128,6 +144,61 @@ describe('Auth', () => {
             body: JSON.stringify({ email, password: 'wrongpassword' }),
         });
         assert.strictEqual(res.status, 401);
+    });
+
+    it('stores soil inquiries against the authenticated SQLite user', async () => {
+        const email = `soil${Date.now()}@test.com`;
+        const registerRes = await fetch(`${BASE}/api/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'Soil Farmer', email, password: 'password123', phone: '9876543210' }),
+        });
+        const registered = await registerRes.json();
+        assert.strictEqual(registerRes.status, 201);
+
+        const loginRes = await fetch(`${BASE}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password: 'password123' }),
+        });
+        const login = await loginRes.json();
+        assert.strictEqual(loginRes.status, 200);
+        assert.strictEqual(login.user.id, registered.user.id);
+        assert.strictEqual(login.user.phone, '9876543210');
+
+        const inquiryRes = await fetch(`${BASE}/api/soil/inquiry`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${login.token}`,
+            },
+            body: JSON.stringify({
+                name: 'Soil Farmer',
+                phone: '9876543210',
+                village: 'Kakati',
+                district: 'Belagavi',
+                landAcres: '2.5',
+                crop: 'Sugarcane',
+                soilType: 'Black soil',
+                notes: 'Need soil testing guidance',
+            }),
+        });
+        const inquiry = await inquiryRes.json();
+        assert.strictEqual(inquiryRes.status, 201);
+        assert.ok(inquiry.inquiryId);
+        assert.ok(fs.statSync(path.join(tempDbDir, 'smartagricare.db')).size > 0);
+
+        const historyRes = await fetch(`${BASE}/api/soil/inquiries`, {
+            headers: { Authorization: `Bearer ${login.token}` },
+        });
+        const history = await historyRes.json();
+        assert.strictEqual(historyRes.status, 200);
+        assert.strictEqual(history.inquiries.length, 1);
+        assert.strictEqual(history.inquiries[0].district, 'Belagavi');
+        assert.strictEqual(history.inquiries[0].landAcres, 2.5);
+
+        const unauthenticatedRes = await fetch(`${BASE}/api/soil/inquiries`);
+        assert.strictEqual(unauthenticatedRes.status, 401);
     });
 
     it('POST /api/auth/forgot-password responds for unknown email', async () => {

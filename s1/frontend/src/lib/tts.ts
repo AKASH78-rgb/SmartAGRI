@@ -1,11 +1,31 @@
 /**
  * Shared TTS (Text-to-Speech) utility with proper voice selection.
  * Handles async voice loading and explicit language-to-voice matching.
- * Falls back to Google Translate TTS for languages with no native voice (e.g. Telugu).
+ * Falls back to Google Translate TTS for languages with no native voice.
+ *
+ * Supported: English (en), Hindi (hi), Telugu (te), Kannada (kn), Marathi (mr)
  */
 
-const LANG_MAP: Record<string, string> = { en: "en-US", hi: "hi-IN", te: "te-IN" };
-const GTTS_LANG: Record<string, string> = { en: "en", hi: "hi", te: "te" };
+// BCP-47 lang codes for Web Speech API
+const LANG_MAP: Record<string, string> = {
+  en: "en-US",
+  hi: "hi-IN",
+  te: "te-IN",
+  kn: "kn-IN",
+  mr: "mr-IN",
+};
+
+// Google Translate TTS lang codes
+const GTTS_LANG: Record<string, string> = {
+  en: "en",
+  hi: "hi",
+  te: "te",
+  kn: "kn",
+  mr: "mr",
+};
+
+// Languages that almost never have a native browser voice — always use gTTS
+const ALWAYS_USE_GTTS = new Set(["te", "kn", "mr"]);
 
 let cachedVoices: SpeechSynthesisVoice[] = [];
 let _gttsFallbackAudio: HTMLAudioElement | null = null;
@@ -108,6 +128,22 @@ function speakWithGTTS(text: string, lang: string, onEnd?: () => void, onError?:
   }
 }
 
+/** TTS speed setting persisted in localStorage. 0.7=slow, 0.95=normal, 1.3=fast */
+export type TtsSpeed = 'slow' | 'normal' | 'fast';
+const TTS_SPEED_RATES: Record<TtsSpeed, number> = { slow: 0.7, normal: 0.95, fast: 1.3 };
+
+export function getTtsSpeed(): TtsSpeed {
+  try {
+    const v = localStorage.getItem('smartagricare_tts_speed');
+    if (v === 'slow' || v === 'normal' || v === 'fast') return v;
+  } catch { /* ignore */ }
+  return 'normal';
+}
+
+export function setTtsSpeed(speed: TtsSpeed): void {
+  try { localStorage.setItem('smartagricare_tts_speed', speed); } catch { /* ignore */ }
+}
+
 export interface SpeakOptions {
   text: string;
   language: string;           // "en" | "hi" | "te"
@@ -121,7 +157,10 @@ export interface SpeakOptions {
  * Returns true if speech was initiated, false if no TTS available.
  */
 export function speak(opts: SpeakOptions): boolean {
-  const { text, language, rate = 0.95, onEnd, onError } = opts;
+  const { text, language, onEnd, onError } = opts;
+  // Use stored speed setting if caller didn't override
+  const speedRate = TTS_SPEED_RATES[getTtsSpeed()];
+  const rate = opts.rate ?? speedRate;
 
   // Native WebView bridge (expo-speech)
   if ((window as any).__NATIVE_TTS__ && (window as any).ReactNativeWebView) {
@@ -140,6 +179,14 @@ export function speak(opts: SpeakOptions): boolean {
   }
 
   const langCode = LANG_MAP[language] || "en-US";
+
+  // Telugu, Kannada, Marathi: almost no browser has native voices for these.
+  // Always route them through Google TTS for reliable audio.
+  if (ALWAYS_USE_GTTS.has(language)) {
+    window.speechSynthesis?.cancel();
+    return speakWithGTTS(text, language, onEnd, onError);
+  }
+
   const voice = findVoice(langCode);
 
   // If no native voice for this language, use Google Translate TTS fallback
@@ -184,6 +231,7 @@ export function stopSpeaking(): void {
 
 /**
  * Strip markdown, emojis, and special characters so TTS reads naturally.
+ * Preserves all Indic script characters (Devanagari, Telugu, Kannada, Malayalam).
  */
 export function cleanForTts(text: string): string {
   // Remove emojis

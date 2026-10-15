@@ -1,8 +1,7 @@
-Flask==3.1.2
-flask-cors==6.0.2
-gunicorn==25.0.3
-numpy==1.26.4
-pillow==12.1.0
-torch==2.6.0
-timm==1.0.25
-torchvision==0.21.0
+flask
+flask-cors
+tensorflow-cpu==2.15.0
+h5py
+numpy
+Pillow
+gunicorn

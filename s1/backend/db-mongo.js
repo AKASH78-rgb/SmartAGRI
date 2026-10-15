@@ -46,10 +46,12 @@ async function getDb() {
         await db.collection('password_reset_tokens').createIndex({ email: 1, token: 1 });
         await db.collection('password_reset_tokens').createIndex({ expires_at: 1 }, { expireAfterSeconds: 0 });
         await db.collection('disease_reports').createIndex({ user_id: 1, created_at: -1 });
+        await db.collection('soil_inquiries').createIndex({ user_id: 1, created_at: -1 });
+        await db.collection('crop_recommendations').createIndex({ user_id: 1, created_at: -1 });
 
         // Counter collection for auto-increment IDs
         const counters = db.collection('counters');
-        for (const name of ['users', 'disease_reports', 'password_reset_tokens']) {
+        for (const name of ['users', 'disease_reports', 'soil_inquiries', 'password_reset_tokens', 'crop_recommendations']) {
             await counters.updateOne(
                 { _id: name },
                 { $setOnInsert: { seq: 0 } },
@@ -76,15 +78,15 @@ function save() { /* no-op for MongoDB */ }
 function flushSave() { /* no-op for MongoDB */ }
 
 // --- User helpers ---
-async function createUser(name, email, passwordHash) {
+async function createUser(name, email, passwordHash, phone = '', location = '') {
     const id = await nextId('users');
     const doc = {
         id, name, email, password_hash: passwordHash,
-        phone: '', location: '',
+        phone: phone || '', location: location || '',
         created_at: new Date(),
     };
     await db.collection('users').insertOne(doc);
-    return { id: doc.id, name: doc.name, email: doc.email, location: doc.location };
+    return { id: doc.id, name: doc.name, email: doc.email, phone: doc.phone, location: doc.location };
 }
 
 async function findUserByEmail(email) {
@@ -141,6 +143,61 @@ async function getUserReports(userId, limit = 50, offset = 0) {
         symptoms: safeParse(r.symptoms), possibleCauses: r.possible_causes || '',
         preventiveMeasures: safeParse(r.preventive_measures),
         recommendation: r.recommendation || null,
+    }));
+}
+
+async function saveSoilInquiry(userId, inquiry) {
+    const id = await nextId('soil_inquiries');
+    await db.collection('soil_inquiries').insertOne({
+        id, user_id: userId,
+        name: inquiry.name, phone: inquiry.phone,
+        village: inquiry.village || '', district: inquiry.district,
+        land_acres: inquiry.landAcres ?? null,
+        crop: inquiry.crop || '', soil_type: inquiry.soilType || '',
+        notes: inquiry.notes || '', created_at: new Date(),
+    });
+    return id;
+}
+
+async function getUserSoilInquiries(userId, limit = 50, offset = 0) {
+    const docs = await db.collection('soil_inquiries')
+        .find({ user_id: userId })
+        .sort({ created_at: -1, id: -1 })
+        .skip(offset)
+        .limit(limit)
+        .toArray();
+    return docs.map(r => ({
+        id: r.id, name: r.name, phone: r.phone, village: r.village,
+        district: r.district, landAcres: r.land_acres, crop: r.crop,
+        soilType: r.soil_type, notes: r.notes, createdAt: r.created_at,
+    }));
+}
+
+// --- Crop recommendation history helpers ---
+async function saveCropRecommendation(userId, rec) {
+    const id = await nextId('crop_recommendations');
+    await db.collection('crop_recommendations').insertOne({
+        id, user_id: userId,
+        season: rec.season || '', soil: rec.soil || '', water: rec.water || '',
+        district: rec.district || '', land: rec.land || '',
+        top_crop: rec.topCrop || '', top_match: rec.topMatch || 0,
+        results: rec.results || [],
+        created_at: new Date(),
+    });
+    return id;
+}
+
+async function getUserCropRecommendations(userId, limit = 50, offset = 0) {
+    const docs = await db.collection('crop_recommendations')
+        .find({ user_id: userId })
+        .sort({ created_at: -1 })
+        .skip(offset)
+        .limit(limit)
+        .toArray();
+    return docs.map(r => ({
+        id: r.id, season: r.season, soil: r.soil, water: r.water,
+        district: r.district, land: r.land, topCrop: r.top_crop,
+        topMatch: r.top_match, results: r.results || [], createdAt: r.created_at,
     }));
 }
 
@@ -224,6 +281,8 @@ module.exports = {
     getDb, save, flushSave,
     createUser, findUserByEmail,
     saveDiseaseReport, getUserReports,
+    saveSoilInquiry, getUserSoilInquiries,
+    saveCropRecommendation, getUserCropRecommendations,
     createResetToken, findValidResetToken, markTokenUsed,
     updateUserPassword, updateUserProfile,
     saveAuthToken, findAuthToken, deleteAuthToken,

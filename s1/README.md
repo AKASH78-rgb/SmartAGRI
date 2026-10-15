@@ -49,7 +49,7 @@ pip install -r requirements.txt
 python app.py        # Development (port 5001)
 ```
 
-> **Note:** Place your trained `.pkl` model in `ml-service/models/disease_model.pkl`. Without it, the service returns mock predictions.
+> **Note:** The service loads `models/best_model.h5` and `models/class_indices_reverse.json` from the repository root. Configure `MODEL_URL` to download the model at startup when it is not present locally. The installed model recognizes Tomato, Potato, and Bell Pepper leaves.
 
 ### 3. Web Frontend (Vite)
 
@@ -83,6 +83,8 @@ npx expo start --ios       # iOS simulator
 |--------|----------|-------------|
 | POST | `/api/auth/login` | User login |
 | POST | `/api/auth/register` | User registration |
+| POST | `/api/soil/inquiry` | Save authenticated farmer soil details |
+| GET | `/api/soil/inquiries` | Read the authenticated farmer's saved soil details |
 | GET | `/api/diseases` | List all diseases |
 | GET | `/api/diseases/:name` | Get disease info |
 | POST | `/api/crops/recommend` | Crop recommendations by season |
@@ -102,6 +104,8 @@ npx expo start --ios       # iOS simulator
 ## Environment & Configuration
 
 - **Backend `.env`** configures `PORT`, `JWT_SECRET`, `CORS_ORIGINS`, and `ML_SERVICE_URL`
+- **Local database** defaults to SQLite at `backend/data/smartagricare.db`; set `DATABASE_TYPE=mongodb` with `MONGODB_URI` to opt into MongoDB
+- **Farmer data** — account credentials, soil inquiries, and authenticated activity history are stored by user ID
 - **Frontend** uses `VITE_API_URL` and `VITE_ML_URL` env vars (defaults to `localhost:5000` / `localhost:5001`)
 - **Expo wrapper** — update `DEV_URL` in `App.js` with your machine's local IP
 

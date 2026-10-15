@@ -18,11 +18,11 @@ if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout !== 'functi
 
 // --------------- Groq LLM (primary — free tier: 30 RPM, 14400 RPD) ---------------
 const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
-const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+const GROQ_MODEL = process.env.GROQ_MODEL || 'qwen/qwen3.8-27b';
 
 // --------------- Gemini LLM fallback ---------------
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
 
 // --------------- SambaNova LLM fallback (free tier, OpenAI-compatible) ---------------
 const SAMBANOVA_API_KEY = process.env.SAMBANOVA_API_KEY || '';
@@ -32,11 +32,19 @@ const SAMBANOVA_MODEL = process.env.SAMBANOVA_MODEL || 'Meta-Llama-3.1-70B-Instr
 const WEATHER_API_KEY = process.env.WEATHER_API_KEY || '';
 
 // Database: MongoDB if MONGODB_URI is set, otherwise SQLite (local)
-const dbModule = process.env.MONGODB_URI ? './db-mongo' : './db';
-console.log(`Database: ${process.env.MONGODB_URI ? 'MongoDB Atlas' : 'SQLite (local)'}`);
-const { getDb, save, flushSave, createUser, findUserByEmail, saveDiseaseReport, getUserReports, createResetToken, findValidResetToken, markTokenUsed, updateUserPassword, updateUserProfile, saveAuthToken, findAuthToken, deleteAuthToken, deleteAuthTokensByEmail, purgeExpiredAuthTokens } = require(dbModule);
+const databaseType = (process.env.DATABASE_TYPE || 'sqlite').toLowerCase();
+if (!['sqlite', 'mongodb'].includes(databaseType)) {
+  throw new Error(`Unsupported DATABASE_TYPE "${databaseType}". Use "sqlite" or "mongodb".`);
+}
+if (databaseType === 'mongodb' && !process.env.MONGODB_URI) {
+  throw new Error('DATABASE_TYPE=mongodb requires MONGODB_URI to be configured.');
+}
+const dbModule = databaseType === 'mongodb' ? './db-mongo' : './db';
+console.log(`Database: ${databaseType === 'mongodb' ? 'MongoDB Atlas' : 'SQLite'}`);
+const { getDb, save, flushSave, createUser, findUserByEmail, saveDiseaseReport, getUserReports, saveSoilInquiry, getUserSoilInquiries, saveCropRecommendation, getUserCropRecommendations, createResetToken, findValidResetToken, markTokenUsed, updateUserPassword, updateUserProfile, saveAuthToken, findAuthToken, deleteAuthToken, deleteAuthTokensByEmail, purgeExpiredAuthTokens } = require(dbModule);
 const { coordinateCropAndFertilizer, CROP_PROFILES } = require('./crop-fertilizer-agent');
 const CROP_DISEASE_DATA = require('../crop_disease_data.json');
+const KARNATAKA_FERTILIZER_SHOPS = require('../karnataka_fertilizer_shops.json');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -227,6 +235,14 @@ app.use(express.json({ limit: '100kb' }));
 app.use((req, _res, next) => { if (!IS_PROD || req.url.startsWith('/api/')) console.log(`${new Date().toISOString()} ${req.method} ${req.url.split('?')[0]}`); next(); });
 
 // --------------- AP Crop Database ---------------
+// Only crops that have images in the image/crops folder
+const CROPS_WITH_IMAGES = [
+  'Rice', 'Paddy', 'Cotton', 'Maize', 'Corn', 'Banana', 'Coconut', 'Mango',
+  'Watermelon', 'Muskmelon', 'Black Gram', 'Urad', 'Green Gram', 'Moong',
+  'Red Gram', 'Tur Dal', 'Chickpea', 'Bengal Gram', 'Lentil', 'Kidneybeans',
+  'Mothbeans', 'Jute', 'Grapes', 'Orange', 'Papaya', 'Pomegranate', 'Apple', 'Coffee'
+];
+
 const AP_CROPS = [
   // ── Kharif crops ──
   { name: 'Paddy (Rice)', season: 'Kharif', soils: ['Alluvial', 'Clay', 'Black Cotton', 'Coastal Saline'], water: 'High', period: '120-150 days', yield: '30-60 q/ha', districts: ['East Godavari', 'West Godavari', 'Krishna', 'Guntur', 'Prakasam', 'Nellore', 'Srikakulam', 'Vizianagaram', 'Visakhapatnam', 'Kakinada', 'Konaseema', 'Bapatla', 'Eluru', 'NTR', 'Anakapalli'], sowing: 'June-July', harvest: 'Oct-Nov', fertilizer: 'NPK 150:60:60 + ZnSO₄ 25 kg/ha', emoji: '🌾', varieties: ['BPT-5204 (Samba Masuri)', 'MTU-1010', 'MTU-7029', 'Swarna', 'NLR-34449', 'Pushyami', 'CSR-36 (saline)'], msp: '₹2,300/qtl', intercrops: ['Greengram', 'Vegetables (tomato, chilli)'], image: 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?w=400&q=80', phRange: '6.0-7.5', rainfall: '1200-1500 mm' },
@@ -326,6 +342,8 @@ app.post('/api/auth/register', authRateLimit, async (req, res) => {
     const name = (req.body.name || '').trim();
     const email = (req.body.email || '').trim().toLowerCase();
     const password = req.body.password || '';
+    const phone = (req.body.phone || '').trim();
+    const location = (req.body.location || '').trim();
     if (!name || name.length < 2) return res.status(400).json({ success: false, error: 'Name must be at least 2 characters' });
     if (!email || !email.includes('@')) return res.status(400).json({ success: false, error: 'Valid email required' });
     if (!password || password.length < 6) return res.status(400).json({ success: false, error: 'Password must be at least 6 characters' });
@@ -334,10 +352,10 @@ app.post('/api/auth/register', authRateLimit, async (req, res) => {
     if (existing) return res.status(409).json({ success: false, error: 'Email already registered' });
 
     const hash = await bcrypt.hash(password, 10);
-    const user = await createUser(name, email, hash);
+    const user = await createUser(name, email, hash, phone, location);
     const token = await generateToken(user.id);
 
-    res.status(201).json({ success: true, user: { id: user.id, name: user.name, email: user.email }, token });
+    res.status(201).json({ success: true, user: { id: user.id, name: user.name, email: user.email, phone: user.phone || '', location: user.location || '' }, token });
   } catch (err) {
     console.error('Register error:', err);
     res.status(500).json({ success: false, error: 'Server error' });
@@ -359,7 +377,7 @@ app.post('/api/auth/login', authRateLimit, async (req, res) => {
     if (!valid) return res.status(401).json({ success: false, error: 'Invalid email or password' });
 
     const token = await generateToken(user.id);
-    res.json({ success: true, user: { id: user.id, name: user.name, email: user.email, location: user.location || '' }, token });
+    res.json({ success: true, user: { id: user.id, name: user.name, email: user.email, phone: user.phone || '', location: user.location || '' }, token });
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ success: false, error: 'Server error' });
@@ -483,6 +501,63 @@ app.post('/api/disease/report', requireAuth, async (req, res) => {
   }
 });
 
+app.post('/api/soil/inquiry', requireAuth, async (req, res) => {
+  try {
+    const body = req.body || {};
+    const name = typeof body.name === 'string' ? body.name.trim() : '';
+    const phone = typeof body.phone === 'string' ? body.phone.trim() : '';
+    const village = typeof body.village === 'string' ? body.village.trim() : '';
+    const district = typeof body.district === 'string' ? body.district.trim() : '';
+    const landAcresInput = body.landAcres === undefined || body.landAcres === null
+      ? ''
+      : String(body.landAcres).trim();
+    const crop = typeof body.crop === 'string' ? body.crop.trim() : '';
+    const soilType = typeof body.soilType === 'string' ? body.soilType.trim() : '';
+    const notes = typeof body.notes === 'string' ? body.notes.trim() : '';
+
+    if (name.length < 2 || name.length > 120) {
+      return res.status(400).json({ success: false, error: 'Name must be between 2 and 120 characters.' });
+    }
+    const phoneDigits = phone.replace(/\D/g, '');
+    if (!/^[0-9+().\-\s]{7,25}$/.test(phone) || phoneDigits.length < 7 || phoneDigits.length > 15) {
+      return res.status(400).json({ success: false, error: 'Enter a valid phone number.' });
+    }
+    if (!district || district.length > 120) {
+      return res.status(400).json({ success: false, error: 'District is required and must be at most 120 characters.' });
+    }
+    if (village.length > 120 || crop.length > 120 || soilType.length > 120 || notes.length > 2000) {
+      return res.status(400).json({ success: false, error: 'One or more fields exceed the allowed length.' });
+    }
+
+    let landAcres = null;
+    if (landAcresInput) {
+      landAcres = Number(landAcresInput);
+      if (!Number.isFinite(landAcres) || landAcres <= 0 || landAcres > 1000000) {
+        return res.status(400).json({ success: false, error: 'Land size must be a positive number of acres.' });
+      }
+    }
+
+    const inquiryId = await saveSoilInquiry(req.userId, {
+      name, phone, village, district, landAcres, crop, soilType, notes,
+    });
+    flushSave();
+    res.status(201).json({ success: true, inquiryId });
+  } catch (err) {
+    console.error('Save soil inquiry error:', err);
+    res.status(500).json({ success: false, error: 'Failed to save soil inquiry.' });
+  }
+});
+
+app.get('/api/soil/inquiries', requireAuth, async (req, res) => {
+  try {
+    const inquiries = await getUserSoilInquiries(req.userId);
+    res.json({ success: true, inquiries });
+  } catch (err) {
+    console.error('Get soil inquiries error:', err);
+    res.status(500).json({ success: false, error: 'Failed to load soil inquiries.' });
+  }
+});
+
 app.get('/api/disease/reports', requireAuth, async (req, res) => {
   try {
     const reports = await getUserReports(req.userId);
@@ -513,7 +588,7 @@ app.post('/api/disease/collective', [requireAuth, collectiveRateLimit], async (r
     };
     const needsWeather = weather.temperature === null || weather.humidity === null || weather.rainfall_7d_sum === null;
     if (needsWeather) {
-      const fetched = await fetchWeatherData(17.6868, 83.2185);
+      const fetched = await fetchWeatherData(DEFAULT_WEATHER_LAT, DEFAULT_WEATHER_LON);
       if (weather.temperature === null) weather.temperature = fetched.temperature;
       if (weather.humidity === null) weather.humidity = fetched.humidity;
       if (weather.rainfall_7d_sum === null) weather.rainfall_7d_sum = fetched.rainfall_7d_sum;
@@ -681,7 +756,7 @@ async function getMlServiceStatus() {
     if (!modelReady) {
       reason = data.model_error || 'Model weights not loaded';
       if (reason.toLowerCase().includes('model file') || reason.toLowerCase().includes('model_url')) {
-        message = 'Disease detection model is being set up. Ask your admin to place best_swin_crop_disease.pth in the project folder or configure MODEL_URL.';
+        message = 'Disease detection model is being set up. Add best_model.h5 and class_indices_reverse.json to the models/ folder or configure MODEL_URL.';
       } else if (reason.toLowerCase().includes('failed to load model')) {
         message = 'Disease detection model failed to start. Ask your admin to check the model file and dependencies.';
       } else {
@@ -915,7 +990,7 @@ async function proxyToMlService(req, res) {
       const lower = String(rawMsg).toLowerCase();
       let friendly = 'Disease detection engine had an issue. Please try again with a clearer close-up leaf photo.';
       if (lower.includes('model file') || lower.includes('model_url') || lower.includes('model is not available')) {
-        friendly = 'Disease detection model is being set up. Ask your admin to place best_swin_crop_disease.pth in the project folder or configure MODEL_URL.';
+        friendly = 'Disease detection model is being set up on the ML service. Please try again in a moment.';
       } else if (lower.includes('invalid image')) {
         friendly = 'That file could not be read as an image. Please try a different photo (JPG or PNG).';
       } else if (lower.includes('too large') || lower.includes('dimensions')) {
@@ -987,8 +1062,9 @@ function enrichMlResponse(mlData) {
     : (typeof mlData.confidence === 'string' && !isNaN(parseFloat(mlData.confidence))
       ? Math.round(parseFloat(mlData.confidence) * 100)
       : null);
-  let status = (mlData.status === 'healthy' || (disease || '').toLowerCase().includes('healthy')) ? 'Healthy' : 'Diseased';
-  if (!isSuccess || mlData.low_confidence) status = mlData.low_confidence ? 'Unknown' : status;
+  let status = (mlData.status === 'healthy' || (disease || '').toLowerCase().includes('healthy')) ? 'healthy' : 'diseased';
+  if (!isSuccess || mlData.low_confidence) status = mlData.low_confidence ? 'unknown' : status;
+  if (mlData.status === 'unrecognized') status = 'unrecognized';
   const entry = findDiseaseEntry(crop, disease);
   const rawSeverity = mlData.severity_level || mlData.severity || '';
   let severityLevel = rawSeverity;
@@ -1051,7 +1127,7 @@ async function detectAndEnrichHandler(req, res) {
       const lower = String(rawMsg).toLowerCase();
       let friendly = 'Disease detection engine had an issue. Please try again with a clearer close-up leaf photo.';
       if (lower.includes('model file') || lower.includes('model_url') || lower.includes('model is not available')) {
-        friendly = 'Disease detection model is being set up. Ask your admin to place best_swin_crop_disease.pth in the project folder or configure MODEL_URL.';
+        friendly = 'Disease detection model is being set up on the ML service. Please try again in a moment.';
       } else if (lower.includes('invalid image')) {
         friendly = 'That file could not be read as an image. Please try a different photo (JPG or PNG).';
       } else if (lower.includes('too large') || lower.includes('dimensions')) {
@@ -1087,7 +1163,7 @@ async function detectAndEnrichHandler(req, res) {
   }
 }
 
-async function fetchWeatherData(lat = 17.6868, lng = 83.2185) {
+async function fetchWeatherData(lat = DEFAULT_WEATHER_LAT, lng = DEFAULT_WEATHER_LON) {
   try {
     const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,precipitation&daily=precipitation_sum&timezone=auto&forecast_days=7`;
     const weatherRes = await fetchWithRetry(weatherUrl, {}, 2, 1500, 15000);
@@ -1142,12 +1218,18 @@ app.get('/api/crop-meta', (_req, res) => {
   res.json({ success: true, soils: AP_SOILS, districts: AP_DISTRICTS });
 });
 
-app.post('/api/crops/recommend', (req, res) => {
+app.post('/api/crops/recommend', async (req, res) => {
   try {
     const { season, soil, water, district, land } = req.body;
     if (!season) return res.status(400).json({ success: false, error: 'Season is required' });
 
     let crops = [...AP_CROPS];
+
+    // Filter to only crops that have images in the crops folder
+    crops = crops.filter(c => {
+      const cropName = c.name.toLowerCase();
+      return CROPS_WITH_IMAGES.some(imgCrop => cropName.includes(imgCrop.toLowerCase()) || imgCrop.toLowerCase().includes(cropName.split(' ')[0]));
+    });
 
     // Filter by season
     const seasonKey = season.toLowerCase();
@@ -1215,9 +1297,43 @@ app.post('/api/crops/recommend', (req, res) => {
     // Limit to top 12
     crops = crops.slice(0, 12);
 
+    // Save to history if user is authenticated (optional auth)
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.slice(7);
+      const userId = await verifyToken(token);
+      if (userId && crops.length > 0) {
+        try {
+          // Store a compact version of results for history
+          const compactResults = crops.map(c => ({
+            name: c.name, match: c.match, emoji: c.emoji, period: c.period,
+            water: c.water, fertilizer: c.fertilizer, districts: c.districts,
+          }));
+          await saveCropRecommendation(userId, {
+            season, soil: soil || '', water: water || '', district: district || '',
+            land: land || '', topCrop: crops[0].name, topMatch: crops[0].match,
+            results: compactResults,
+          });
+        } catch (saveErr) {
+          console.error('Failed to save crop recommendation history:', saveErr.message);
+        }
+      }
+    }
+
     res.json({ success: true, crops, soils: AP_SOILS, districts: AP_DISTRICTS });
   } catch (err) {
     console.error('Crop recommend error:', err);
+    res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+
+// --- Crop recommendation history (authenticated) ---
+app.get('/api/crop-recommendations/history', requireAuth, async (req, res) => {
+  try {
+    const history = await getUserCropRecommendations(req.userId);
+    res.json({ success: true, history });
+  } catch (err) {
+    console.error('Get crop recommendation history error:', err);
     res.status(500).json({ success: false, error: 'Server error' });
   }
 });
@@ -1356,6 +1472,8 @@ async function fetchWithRetry(url, options = {}, retries = 2, delayMs = 1000, ti
 const weatherRateLimit = rateLimit(60000, 20); // 20 weather requests per minute per IP
 const _weatherCache = new Map(); // key: "lat,lng" (truncated) → { data, ts }
 const WEATHER_CACHE_TTL = 300000; // 5 minutes - weather doesn't change that fast
+const DEFAULT_WEATHER_LAT = 15.8497;
+const DEFAULT_WEATHER_LON = 74.4977;
 const _nominatimCache = new Map(); // key: "lat,lng" (truncated) → { name, ts }
 const NOMINATIM_CACHE_TTL = 3600000; // 1 hour
 // Evict stale Nominatim cache entries every hour
@@ -1368,13 +1486,51 @@ setInterval(() => {
     if (now - val.ts > WEATHER_CACHE_TTL) _weatherCache.delete(key);
   }
 }, NOMINATIM_CACHE_TTL);
+const PLACE_ALIASES = {
+  belgaum: 'Belagavi',
+  belgaavi: 'Belagavi',
+  belgavi: 'Belagavi',
+  'belgaum city': 'Belagavi',
+};
+const UNTRUSTED_WEATHER_PLACES = ['nelamangala', 'yelahanka', 'hoskote', 'devanahalli', 'whitefield'];
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const toRad = (d) => (d * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function normalizePlaceName(name) {
+  if (!name) return '';
+  const key = String(name).toLowerCase().replace(/,.*$/, '').trim();
+  return PLACE_ALIASES[key] || name.replace(/,.*$/, '').trim();
+}
+
+function resolveWeatherLocationName(lat, lon, rawName, query) {
+  if (query) return query;
+  const nearest = Object.entries(KARNATAKA_DISTRICT_COORDS).reduce((best, [name, c]) => {
+    const km = haversineKm(lat, lon, c.lat, c.lng);
+    return km < best.km ? { name, km } : best;
+  }, { name: 'Belagavi', km: Infinity });
+  const normalized = normalizePlaceName(rawName);
+  const low = normalized.toLowerCase();
+  if (UNTRUSTED_WEATHER_PLACES.some((p) => low.includes(p))) {
+    return 'Belagavi, IN';
+  }
+  if (nearest.km <= 40) return `${nearest.name}, IN`;
+  return normalized ? `${normalized}, IN` : 'Belagavi, IN';
+}
+
 app.get('/api/weather', weatherRateLimit, async (req, res) => {
   try {
     const q = req.query.q ? String(req.query.q).trim() : null;
     const rawLat = parseFloat(req.query.lat ?? req.query.latitude);
     const rawLon = parseFloat(req.query.lon ?? req.query.lng ?? req.query.longitude);
-    const lat = isNaN(rawLat) ? 17.6868 : Math.max(-90, Math.min(90, rawLat));
-    const lon = isNaN(rawLon) ? 83.2185 : Math.max(-180, Math.min(180, rawLon));
+    const lat = isNaN(rawLat) ? DEFAULT_WEATHER_LAT : Math.max(-90, Math.min(90, rawLat));
+    const lon = isNaN(rawLon) ? DEFAULT_WEATHER_LON : Math.max(-180, Math.min(180, rawLon));
     const cacheKey = q ? `q_${q.toLowerCase()}` : `${lat.toFixed(2)},${lon.toFixed(2)}`;
 
     // Check weather cache first
@@ -1405,7 +1561,12 @@ app.get('/api/weather', weatherRateLimit, async (req, res) => {
           const description = data.weather?.[0]?.description || 'clear sky';
           const iconCode = data.weather?.[0]?.icon || '01d';
           const iconUrl = `https://openweathermap.org/img/wn/${iconCode}@2x.png`;
-          const locationName = `${data.name}${data.sys?.country ? ', ' + data.sys.country : ''}`;
+          const locationName = resolveWeatherLocationName(
+            data.coord?.lat ?? lat,
+            data.coord?.lon ?? lon,
+            `${data.name}${data.sys?.country ? ', ' + data.sys.country : ''}`,
+            q
+          );
           const nowIso = new Date().toISOString();
 
           // visibility from OWM is in metres, convert to km (max 10km)
@@ -1456,12 +1617,12 @@ app.get('/api/weather', weatherRateLimit, async (req, res) => {
     const weatherData = await weatherRes.json();
     const current = weatherData.current || {};
 
-    let locationName = q || 'Visakhapatnam, IN';
+    let locationName = q || 'Belagavi, IN';
     if (!q) {
       const geoCacheKey = `${lat.toFixed(2)},${lon.toFixed(2)}`;
       const cachedGeo = _nominatimCache.get(geoCacheKey);
       if (cachedGeo && Date.now() - cachedGeo.ts < NOMINATIM_CACHE_TTL) {
-        locationName = cachedGeo.name;
+        locationName = resolveWeatherLocationName(lat, lon, cachedGeo.name, q);
       } else {
         try {
           const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=10&addressdetails=1`;
@@ -1472,12 +1633,15 @@ app.get('/api/weather', weatherRateLimit, async (req, res) => {
           if (geoRes.ok) {
             const geoData = await geoRes.json();
             const addr = geoData.address || {};
-            const city = addr.city || addr.town || addr.village || addr.county || addr.state_district || '';
-            const country = addr.country_code ? addr.country_code.toUpperCase() : 'IN';
-            locationName = city ? `${city}, ${country}` : locationName;
+            const city = addr.city || addr.town || addr.municipality || addr.county || addr.state_district || addr.village || '';
+            locationName = resolveWeatherLocationName(lat, lon, city, q);
             _nominatimCache.set(geoCacheKey, { name: locationName, ts: Date.now() });
+          } else {
+            locationName = resolveWeatherLocationName(lat, lon, '', q);
           }
-        } catch { /* fallback */ }
+        } catch {
+          locationName = resolveWeatherLocationName(lat, lon, '', q);
+        }
       }
     }
 
@@ -1530,7 +1694,7 @@ app.get('/api/weather', weatherRateLimit, async (req, res) => {
     res.json(responseData);
   } catch (err) {
     console.error('Weather API error:', err.message);
-    const cacheKey = `${Math.max(-90, Math.min(90, parseFloat(req.query.lat) || 17.6868)).toFixed(2)},${Math.max(-180, Math.min(180, parseFloat(req.query.lng) || 83.2185)).toFixed(2)}`;
+    const cacheKey = `${Math.max(-90, Math.min(90, parseFloat(req.query.lat) || DEFAULT_WEATHER_LAT)).toFixed(2)},${Math.max(-180, Math.min(180, parseFloat(req.query.lng) || DEFAULT_WEATHER_LON)).toFixed(2)}`;
     const staleCache = _weatherCache.get(cacheKey);
     if (staleCache) {
       return res.json({ ...staleCache.data, _stale: true });
@@ -1542,23 +1706,113 @@ app.get('/api/weather', weatherRateLimit, async (req, res) => {
   }
 });
 
-// --- Stores (OpenStreetMap Overpass) ---
+// --- Stores (OpenStreetMap Overpass + Karnataka Fertilizer Shops) ---
 const storesRateLimit = rateLimit(60000, 15); // 15 store searches per minute per IP
 // Cache Overpass results for 10 minutes to avoid slow/rate-limited external calls
 const _storesCache = new Map(); // key: "lat,lng" (rounded to 2 decimals) → { ts, data }
 const STORES_CACHE_TTL = 10 * 60 * 1000;
+
+// Karnataka districts list for location matching
+const KARNATAKA_DISTRICTS = [
+  'Bagalkot', 'Belagavi', 'Davanagere', 'Dharwad', 'Gadag', 'Haveri',
+  'Chitradurga', 'Uttara Kannada', 'Vijayapura', 'Shivamogga', 'Chikkaballapur'
+];
+
+// Karnataka district GPS coordinates mapping
+const KARNATAKA_DISTRICT_COORDS = {
+  'Bagalkot': { lat: 16.1867, lng: 75.6961 },
+  'Belagavi': { lat: 15.8497, lng: 74.4977 },
+  'Davanagere': { lat: 14.4644, lng: 75.9218 },
+  'Dharwad': { lat: 15.4589, lng: 75.0078 },
+  'Gadag': { lat: 15.4166, lng: 75.6270 },
+  'Haveri': { lat: 14.7951, lng: 75.3991 },
+  'Chitradurga': { lat: 14.2251, lng: 76.3980 },
+  'Uttara Kannada': { lat: 14.8136, lng: 74.1295 },
+  'Vijayapura': { lat: 16.8302, lng: 75.7100 },
+  'Shivamogga': { lat: 13.9299, lng: 75.5681 },
+  'Chikkaballapur': { lat: 13.4355, lng: 77.7315 }
+};
+
 app.get('/api/stores/nearby', storesRateLimit, async (req, res) => {
   try {
-    const lat = Math.max(-90, Math.min(90, parseFloat(req.query.lat) || 17.6868));  // Default: Visakhapatnam
-    const lng = Math.max(-180, Math.min(180, parseFloat(req.query.lng) || 83.2185));
+    const requestedLat = parseFloat(req.query.lat);
+    const requestedLng = parseFloat(req.query.lng);
+    const hasUserCoordinates = Number.isFinite(requestedLat) && Number.isFinite(requestedLng);
+    const district = typeof req.query.district === 'string' ? req.query.district.trim() : '';
     const radius = Math.min(parseInt(req.query.radius) || 30000, 50000); // 30km default, 50km max
 
+    const matchedDistrict = KARNATAKA_DISTRICTS.find(
+      name => name.toLowerCase() === district.toLowerCase()
+    );
+    if (!hasUserCoordinates && !matchedDistrict) {
+      return res.status(400).json({
+        success: false,
+        error: 'Share your location or select a Karnataka district to find stores.',
+      });
+    }
+
+    const districtCenter = matchedDistrict ? KARNATAKA_DISTRICT_COORDS[matchedDistrict] : null;
+    const lat = hasUserCoordinates
+      ? Math.max(-90, Math.min(90, requestedLat))
+      : districtCenter.lat;
+    const lng = hasUserCoordinates
+      ? Math.max(-180, Math.min(180, requestedLng))
+      : districtCenter.lng;
+
+    console.log(`Stores API called with lat: ${lat}, lng: ${lng}, district: ${district}`);
+
     // Check cache (rounded to 2 decimal places ≈ 1km grid)
-    const cacheKey = `${lat.toFixed(2)},${lng.toFixed(2)},${radius}`;
+    const cacheKey = `${lat.toFixed(2)},${lng.toFixed(2)},${radius},${district}`;
     const cached = _storesCache.get(cacheKey);
     if (cached && Date.now() - cached.ts < STORES_CACHE_TTL) {
       return res.json(cached.data);
     }
+
+    // Get Karnataka fertilizer shops (all shops from database)
+    const karnatakaShops = KARNATAKA_FERTILIZER_SHOPS.map((shop, i) => ({
+      id: `ka_${i}`,
+      name: shop.name,
+      category: 'Seeds & Fertilizers',
+      rating: null,
+      distance: 0, // Will be calculated
+      distanceKm: 0,
+      lat: shop.lat,
+      lon: shop.lng,
+      phone: shop.phone,
+      district: shop.district,
+      source: 'karnataka_database'
+    }));
+
+    // Calculate distances for Karnataka shops
+    const karnatakaStoresWithDist = karnatakaShops.map(shop => {
+      const dist = haversine(lat, lng, shop.lat, shop.lon);
+      return {
+        ...shop,
+        distance: dist < 1 ? `${Math.round(dist * 1000)} m` : `${dist.toFixed(1)} km`,
+        distanceKm: dist,
+        lng: shop.lon,
+        address: `${shop.district}, Karnataka (approximate district-center pin)`,
+        locationApproximate: true,
+        open: null
+      };
+    });
+
+    // If a Karnataka district was matched, only show shops from that district
+    if (matchedDistrict) {
+      const districtShops = karnatakaStoresWithDist.filter(s =>
+        s.district.toLowerCase() === matchedDistrict.toLowerCase()
+      );
+      if (districtShops.length > 0) {
+        // Sort by distance within the district
+        districtShops.sort((a, b) => a.distanceKm - b.distanceKm);
+        const result = { success: true, stores: districtShops, count: districtShops.length };
+        _storesCache.set(cacheKey, { ts: Date.now(), data: result });
+        console.log(`Returning ${districtShops.length} shops from matched district: ${matchedDistrict}`);
+        return res.json(result);
+      }
+    }
+
+    console.log(`Karnataka shops found: ${karnatakaStoresWithDist.length}, closest: ${karnatakaStoresWithDist[0]?.distance}`); // Debug log
 
     // Overpass API query — broader search for agricultural stores in India
     // Covers: agrarian shops, farm supply shops, garden centres, pesticide/fertilizer shops,
@@ -1600,7 +1854,7 @@ app.get('/api/stores/nearby', storesRateLimit, async (req, res) => {
     };
 
     const seen = new Set(); // Deduplicate by name+location
-    const stores = (data.elements || [])
+    const osmStores = (data.elements || [])
       .filter(el => el.tags?.name)
       .map((el, i) => {
         // For ways, use center coordinates
@@ -1632,32 +1886,45 @@ app.get('/api/stores/nearby', storesRateLimit, async (req, res) => {
           open: el.tags.opening_hours ? !el.tags.opening_hours.includes('off') : null,
           lat: elLat,
           lng: elLon,
+          source: 'osm'
         };
       })
-      .filter(Boolean)
+      .filter(Boolean);
+
+    // Check if user is in Karnataka (approximate bounds: 11.5°N to 18.5°N, 74°E to 78.5°E)
+    const isInKarnataka = lat >= 11.5 && lat <= 18.5 && lng >= 74 && lng <= 78.5;
+
+    // Merge stores: if in Karnataka, show Karnataka shops prioritized by distance
+    let allStores;
+    if (isInKarnataka) {
+      // Always show Karnataka shops when in Karnataka, sorted by distance
+      // Prioritize shops from the closest district
+      allStores = karnatakaStoresWithDist.sort((a, b) => a.distanceKm - b.distanceKm);
+    } else {
+      // Show Karnataka shops if within 300km, otherwise OSM only
+      const nearbyKarnataka = karnatakaStoresWithDist.filter(s => s.distanceKm <= 300);
+      allStores = [...nearbyKarnataka, ...osmStores];
+    }
+
+    // Sort by distance and limit to 30
+    const stores = allStores
       .sort((a, b) => a.distanceKm - b.distanceKm)
       .slice(0, 30);
 
-    // If Overpass returned no results, provide curated fallback stores for Visakhapatnam area
+    // If no stores found, use Karnataka shops as fallback
     if (stores.length === 0) {
-      const fallbackStores = [
-        { id: 9001, name: 'Sri Sai Agro Agencies', category: 'Seeds & Fertilizers', rating: '4.2', distance: '2.1 km', distanceKm: 2.1, address: 'Dwarakanagar, Visakhapatnam', phone: '', open: true, lat: 17.7230, lng: 83.3013 },
-        { id: 9002, name: 'Rythu Seva Kendra', category: 'Seeds & Fertilizers', rating: '4.0', distance: '3.5 km', distanceKm: 3.5, address: 'Gajuwaka, Visakhapatnam', phone: '', open: true, lat: 17.7012, lng: 83.2151 },
-        { id: 9003, name: 'Andhra Agro Industries', category: 'Farm Supplies', rating: '4.3', distance: '4.2 km', distanceKm: 4.2, address: 'Akkayyapalem, Visakhapatnam', phone: '', open: true, lat: 17.7340, lng: 83.3198 },
-        { id: 9004, name: 'Krishi Vigyan Fertilizers', category: 'Seeds & Fertilizers', rating: '3.9', distance: '5.0 km', distanceKm: 5.0, address: 'Maddilapalem, Visakhapatnam', phone: '', open: true, lat: 17.7452, lng: 83.3075 },
-        { id: 9005, name: 'Green Valley Nursery', category: 'Nursery & Garden', rating: '4.5', distance: '6.3 km', distanceKm: 6.3, address: 'Pendurthi, Visakhapatnam', phone: '', open: true, lat: 17.7819, lng: 83.2148 },
-        { id: 9006, name: 'Kisan Pesticides & Seeds', category: 'Pesticides & Chemicals', rating: '4.1', distance: '3.8 km', distanceKm: 3.8, address: 'MVP Colony, Visakhapatnam', phone: '', open: true, lat: 17.7178, lng: 83.3014 },
-        { id: 9007, name: 'Bharat Farm Equipment', category: 'Farm Supplies', rating: '3.8', distance: '7.1 km', distanceKm: 7.1, address: 'NAD Junction, Visakhapatnam', phone: '', open: true, lat: 17.7130, lng: 83.2490 },
-        { id: 9008, name: 'Vijaya Agri Centre', category: 'Seeds & Fertilizers', rating: '4.4', distance: '4.6 km', distanceKm: 4.6, address: 'Seethammadhara, Visakhapatnam', phone: '', open: true, lat: 17.7261, lng: 83.3155 },
-      ].map(s => {
-        // Recalculate distance from user's actual coordinates
-        const d = haversine(lat, lng, s.lat, s.lng);
-        return { ...s, distanceKm: d, distance: d < 1 ? `${Math.round(d * 1000)} m` : `${d.toFixed(1)} km` };
-      }).sort((a, b) => a.distanceKm - b.distanceKm);
+      const fallbackStores = karnatakaStoresWithDist
+        .filter(s => matchedDistrict
+          ? s.district.toLowerCase() === matchedDistrict.toLowerCase()
+          : s.distanceKm <= 300)
+        .sort((a, b) => a.distanceKm - b.distanceKm)
+        .slice(0, 10);
 
-      const fallbackResult = { success: true, stores: fallbackStores, count: fallbackStores.length };
-      _storesCache.set(cacheKey, { ts: Date.now(), data: fallbackResult });
-      return res.json(fallbackResult);
+      if (fallbackStores.length > 0) {
+        const fallbackResult = { success: true, stores: fallbackStores, count: fallbackStores.length };
+        _storesCache.set(cacheKey, { ts: Date.now(), data: fallbackResult });
+        return res.json(fallbackResult);
+      }
     }
 
     const result = { success: true, stores, count: stores.length };
@@ -1665,25 +1932,59 @@ app.get('/api/stores/nearby', storesRateLimit, async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('Stores API error:', err.message);
-    // Fallback curated stores on error
-    const lat = Math.max(-90, Math.min(90, parseFloat(req.query.lat) || 17.6868));
-    const lng = Math.max(-180, Math.min(180, parseFloat(req.query.lng) || 83.2185));
+    // Fall back only to the supplied Karnataka directory; never substitute another city.
+    const requestedLat = parseFloat(req.query.lat);
+    const requestedLng = parseFloat(req.query.lng);
+    const hasUserCoordinates = Number.isFinite(requestedLat) && Number.isFinite(requestedLng);
+    const district = typeof req.query.district === 'string' ? req.query.district.trim() : '';
+    const matchedDistrict = KARNATAKA_DISTRICTS.find(
+      name => name.toLowerCase() === district.toLowerCase()
+    );
+    const districtCenter = matchedDistrict ? KARNATAKA_DISTRICT_COORDS[matchedDistrict] : null;
+    const lat = hasUserCoordinates ? requestedLat : districtCenter?.lat;
+    const lng = hasUserCoordinates ? requestedLng : districtCenter?.lng;
+    if (lat === undefined || lng === undefined) {
+      return res.status(502).json({
+        success: false,
+        error: 'Unable to find stores for this location. Please try again.',
+      });
+    }
     const toRadF = deg => deg * Math.PI / 180;
     const havF = (lat1, lon1, lat2, lon2) => {
       const R = 6371, dLat = toRadF(lat2 - lat1), dLon = toRadF(lon2 - lon1);
       const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRadF(lat1)) * Math.cos(toRadF(lat2)) * Math.sin(dLon / 2) ** 2;
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     };
-    const fallback = [
-      { id: 9001, name: 'Sri Sai Agro Agencies', category: 'Seeds & Fertilizers', rating: '4.2', address: 'Dwarakanagar, Visakhapatnam', phone: '', open: true, lat: 17.7230, lng: 83.3013 },
-      { id: 9002, name: 'Rythu Seva Kendra', category: 'Seeds & Fertilizers', rating: '4.0', address: 'Gajuwaka, Visakhapatnam', phone: '', open: true, lat: 17.7012, lng: 83.2151 },
-      { id: 9003, name: 'Andhra Agro Industries', category: 'Farm Supplies', rating: '4.3', address: 'Akkayyapalem, Visakhapatnam', phone: '', open: true, lat: 17.7340, lng: 83.3198 },
-      { id: 9005, name: 'Green Valley Nursery', category: 'Nursery & Garden', rating: '4.5', address: 'Pendurthi, Visakhapatnam', phone: '', open: true, lat: 17.7819, lng: 83.2148 },
-    ].map(s => {
-      const d = havF(lat, lng, s.lat, s.lng);
-      return { ...s, distanceKm: d, distance: d < 1 ? `${Math.round(d * 1000)} m` : `${d.toFixed(1)} km` };
-    }).sort((a, b) => a.distanceKm - b.distanceKm);
-    res.json({ success: true, stores: fallback, count: fallback.length });
+    const fallback = KARNATAKA_FERTILIZER_SHOPS
+      .filter(shop => !matchedDistrict || shop.district.toLowerCase() === matchedDistrict.toLowerCase())
+      .map((shop, i) => {
+        const distanceKm = havF(lat, lng, shop.lat, shop.lng);
+        return {
+          id: `ka_${i}`,
+          name: shop.name,
+          category: 'Seeds & Fertilizers',
+          rating: null,
+          address: `${shop.district}, Karnataka (approximate district-center pin)`,
+          phone: shop.phone,
+          open: null,
+          lat: shop.lat,
+          lng: shop.lng,
+          locationApproximate: true,
+          distanceKm,
+          distance: distanceKm < 1 ? `${Math.round(distanceKm * 1000)} m` : `${distanceKm.toFixed(1)} km`,
+          source: 'karnataka_database',
+        };
+      })
+      .filter(shop => matchedDistrict || shop.distanceKm <= 300)
+      .sort((a, b) => a.distanceKm - b.distanceKm)
+      .slice(0, 10);
+    if (fallback.length > 0) {
+      return res.json({ success: true, stores: fallback, count: fallback.length });
+    }
+    return res.status(502).json({
+      success: false,
+      error: 'Unable to find stores for this location. Please try again.',
+    });
   }
 });
 
@@ -1697,27 +1998,41 @@ app.get('/api/stores/search', (req, res) => {
 const ttsRateLimit = rateLimit(60000, 30); // 30 TTS requests per minute per IP
 app.get('/api/tts', ttsRateLimit, async (req, res) => {
   const text = req.query.text || '';
-  const VALID_TTS_LANGS = ['en', 'hi', 'te'];
+  const VALID_TTS_LANGS = ['en', 'hi', 'te', 'kn', 'mr'];
   const lang = VALID_TTS_LANGS.includes(req.query.lang) ? req.query.lang : 'en';
   if (!text || text.length > 500) return res.status(400).json({ error: 'text required (max 500 chars)' });
 
   const encoded = encodeURIComponent(text);
-  const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${lang}&q=${encoded}`;
 
-  try {
-    const response = await fetch(ttsUrl, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!response.ok) throw new Error(`Google TTS ${response.status}`);
-    res.set('Content-Type', 'audio/mpeg');
-    res.set('Cache-Control', 'public, max-age=86400');
-    const buffer = Buffer.from(await response.arrayBuffer());
-    res.send(buffer);
-  } catch (err) {
-    console.error('TTS proxy error:', err.message);
-    res.status(500).json({ error: 'TTS unavailable' });
+  // 'gtx' client works for all languages including hi, te, mr, kn
+  // 'tw-ob' times out for Hindi/Marathi/Telugu on some networks
+  const CLIENTS = ['gtx', 'tw-ob', 't'];
+
+  for (const client of CLIENTS) {
+    const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=${client}&tl=${lang}&q=${encoded}`;
+    try {
+      const response = await fetch(ttsUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Referer': 'https://translate.google.com/',
+          'Accept': 'audio/mpeg, audio/*',
+        },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!response.ok) continue;
+      const buffer = Buffer.from(await response.arrayBuffer());
+      if (buffer.byteLength < 512) continue; // too small = probably an error page
+      res.set('Content-Type', 'audio/mpeg');
+      res.set('Cache-Control', 'public, max-age=86400');
+      return res.send(buffer);
+    } catch (err) {
+      // Try next client
+      continue;
+    }
   }
+
+  console.error('TTS proxy: all clients failed for lang=' + lang);
+  res.status(500).json({ error: 'TTS unavailable' });
 });
 
 // --- Voice (Groq + Gemini + SambaNova cascade) ---
@@ -1750,8 +2065,14 @@ const DETAIL_KEYWORDS = [
   'in detail', 'go on', 'continue', 'expand', 'what else', 'and then',
   'further', 'briefly explain', 'describe it', 'explain it', 'about it',
   'describe me', 'explain me',
+  // Hindi
   'विस्तार', 'बताओ', 'समझाओ', 'और बताओ', 'विवरण', 'जारी', 'विस्तार से', 'और', 'ज्यादा',
+  // Telugu
   'వివరంగా', 'చెప్పు', 'వివరించు', 'ఇంకా', 'మరింత', 'విపులంగా', 'వివరం', 'కొనసాగించు',
+  // Kannada
+  'ವಿವರಿಸು', 'ಹೆಚ್ಚು', 'ಮುಂದುವರಿ', 'ವಿಸ್ತಾರ', 'ಹೇಳು', 'ವಿವರ', 'ಇನ್ನಷ್ಟು',
+  // Marathi
+  'सांग', 'समजाव', 'विस्तार', 'अजून', 'पुढे', 'सविस्तर', 'जास्त',
 ];
 
 function isDetailRequest(text) {
@@ -1759,7 +2080,13 @@ function isDetailRequest(text) {
   return DETAIL_KEYWORDS.some(kw => norm.includes(kw.toLowerCase().normalize('NFC')));
 }
 
-const LANG_DISPLAY = { en: 'English', hi: 'Hindi (Devanagari)', te: 'Telugu (Telugu script)' };
+const LANG_DISPLAY = {
+  en: 'English',
+  hi: 'Hindi (Devanagari script)',
+  te: 'Telugu (Telugu script)',
+  kn: 'Kannada (Kannada script)',
+  mr: 'Marathi (Devanagari script)',
+};
 
 function cleanForTts(text) {
   text = text.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '');
@@ -1769,12 +2096,14 @@ function cleanForTts(text) {
   text = text.replace(/^\s*#{1,6}\s*/gm, '');
   text = text.replace(/^\s*[-\u2022*>|]+\s*/gm, '');
   text = text.replace(/^\s*\d+[.)]\s*/gm, '');
-  text = text.replace(/[^\w\s.,!?'\u0900-\u097F\u0C00-\u0C7F\u0964\u0965]/gu, ' ');
+  // Keep only safe characters for TTS: ASCII word chars, whitespace, punctuation,
+  // and all Indic script Unicode blocks needed for Indian languages
+  text = text.replace(/[^\w\s.,!?'\u0900-\u097F\u0C00-\u0C7F\u0C80-\u0CFF\u0D00-\u0D7F\u0964\u0965]/gu, ' ');
   text = text.replace(/\s+/g, ' ');
   return text.trim();
 }
 
-async function askLLM(userText, history, langCode, weatherContext = null) {
+async function askLLM(userText, history, langCode, weatherContext = null, farmerProfile = null) {
   const langName = LANG_DISPLAY[langCode] || 'English';
   const wantsDetail = isDetailRequest(userText) && history.length > 0;
 
@@ -1783,9 +2112,22 @@ async function askLLM(userText, history, langCode, weatherContext = null) {
     : 'Keep the answer short: 2 to 3 sentences maximum.';
   const maxTokens = wantsDetail ? 512 : 256;
 
+  // Build farmer profile context (Feature #9)
+  let profilePrompt = '';
+  if (farmerProfile && typeof farmerProfile === 'object') {
+    const parts = [];
+    if (farmerProfile.crop) parts.push(`grows ${farmerProfile.crop}`);
+    if (farmerProfile.soil) parts.push(`uses ${farmerProfile.soil} soil`);
+    if (farmerProfile.district) parts.push(`located in ${farmerProfile.district}`);
+    if (farmerProfile.landAcres) parts.push(`has ${farmerProfile.landAcres} acres`);
+    if (parts.length > 0) {
+      profilePrompt = `\n\nFARMER PROFILE (use this context for all answers): This farmer ${parts.join(', ')}. Tailor every answer to their specific crop and location.`;
+    }
+  }
+
   let weatherPrompt = '';
   if (weatherContext && typeof weatherContext === 'object') {
-    const loc = weatherContext.location || 'Visakhapatnam, IN';
+    const loc = weatherContext.location || 'Belagavi, IN';
     const temp = weatherContext.temperature ?? 27;
     const feels = weatherContext.feelsLike ?? weatherContext.feels_like ?? temp;
     const cond = weatherContext.condition || weatherContext.weather_condition || 'Cloudy';
@@ -1808,7 +2150,7 @@ Use this live weather data to accurately answer any questions such as "What is t
   }
 
   const systemContent = VOICE_SYSTEM_PROMPT +
-    `\n\nCurrent language: ${langName}. Reply ONLY in ${langName}. ${lengthInstruction} No special characters, no markdown, no bullet points.${weatherPrompt}`;
+    `\n\nCurrent language: ${langName}. Reply ONLY in ${langName}. ${lengthInstruction} No special characters, no markdown, no bullet points.${weatherPrompt}${profilePrompt}`;
 
   // Build OpenAI-compatible message history (used by Groq and SambaNova)
   const openaiMessages = [{ role: 'system', content: systemContent }];
@@ -1932,13 +2274,109 @@ Use this live weather data to accurately answer any questions such as "What is t
     en: 'Sorry, I could not get a response right now. Please try again shortly.',
     hi: 'माफ करें, अभी जवाब नहीं मिल सका। कृपया थोड़ी देर बाद पुनः प्रयास करें।',
     te: 'క్షమించండి, ఇప్పుడు సమాధానం రాలేదు. దయచేసి కొద్దిసేపట్లో మళ్ళీ ప్రయత్నించండి.',
+    kn: 'ಕ್ಷಮಿಸಿ, ಈಗ ಉತ್ತರ ಸಿಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಸ್ವಲ್ಪ ಸಮಯದ ನಂತರ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.',
+    mr: 'माफ करा, आत्ता उत्तर मिळाले नाही. कृपया थोड्या वेळाने पुन्हा प्रयत्न करा.',
   };
   return errorMessages[langCode] || errorMessages.en;
 }
 
+// --- Voice: Save conversation history (Feature #4) ---
+app.post('/api/voice/history/save', requireAuth, async (req, res) => {
+  const { messages } = req.body;
+  if (!Array.isArray(messages)) return res.status(400).json({ success: false, error: 'messages array required' });
+  try {
+    const db = await getDb();
+    const safeMessages = messages
+      .filter(m => m && typeof m.role === 'string' && typeof m.text === 'string')
+      .slice(-50) // Keep last 50 messages
+      .map(m => ({ role: m.role, text: m.text.slice(0, 2000), timestamp: m.timestamp || Date.now() }));
+    const key = `voice_history_${req.userId}`;
+    await save(key, JSON.stringify({ userId: req.userId, messages: safeMessages, savedAt: new Date().toISOString() }));
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Save voice history error:', err);
+    res.status(500).json({ success: false, error: 'Failed to save history' });
+  }
+});
+
+app.get('/api/voice/history', requireAuth, async (req, res) => {
+  try {
+    const key = `voice_history_${req.userId}`;
+    const db = await getDb();
+    // For SQLite: look up in kv table; for Mongo: handled by save/get
+    let raw = null;
+    try {
+      // Try generic get — works for both SQLite kv and Mongo
+      if (db.get) raw = await db.get(key);
+      else if (db.collection) {
+        const doc = await db.collection('kv').findOne({ key });
+        raw = doc?.value;
+      }
+    } catch { /* no history yet */ }
+    if (!raw) return res.json({ success: true, messages: [] });
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    res.json({ success: true, messages: parsed.messages || [] });
+  } catch (err) {
+    console.error('Get voice history error:', err);
+    res.json({ success: true, messages: [] }); // Fail gracefully
+  }
+});
+
+// --- Voice: Market price query (Feature #3) ---
+const marketRateLimit = rateLimit(60000, 20);
+app.get('/api/voice/market-price', marketRateLimit, async (req, res) => {
+  const { crop } = req.query;
+  if (!crop) return res.status(400).json({ success: false, error: 'crop name required' });
+
+  // Static MSP (Minimum Support Price) data — FY 2024-25 government MSP rates
+  const MSP_DATA = {
+    'rice': { crop: 'Rice (Paddy)', msp: 2300, unit: 'per quintal', season: 'Kharif 2024-25', source: 'CACP India' },
+    'paddy': { crop: 'Rice (Paddy)', msp: 2300, unit: 'per quintal', season: 'Kharif 2024-25', source: 'CACP India' },
+    'wheat': { crop: 'Wheat', msp: 2275, unit: 'per quintal', season: 'Rabi 2024-25', source: 'CACP India' },
+    'maize': { crop: 'Maize', msp: 2090, unit: 'per quintal', season: 'Kharif 2024-25', source: 'CACP India' },
+    'cotton': { crop: 'Cotton (Medium Staple)', msp: 7121, unit: 'per quintal', season: 'Kharif 2024-25', source: 'CACP India' },
+    'groundnut': { crop: 'Groundnut', msp: 6377, unit: 'per quintal', season: 'Kharif 2024-25', source: 'CACP India' },
+    'soybean': { crop: 'Soybean', msp: 4892, unit: 'per quintal', season: 'Kharif 2024-25', source: 'CACP India' },
+    'soya': { crop: 'Soybean', msp: 4892, unit: 'per quintal', season: 'Kharif 2024-25', source: 'CACP India' },
+    'sunflower': { crop: 'Sunflower', msp: 5650, unit: 'per quintal', season: 'Rabi 2024-25', source: 'CACP India' },
+    'jowar': { crop: 'Jowar (Sorghum)', msp: 3180, unit: 'per quintal', season: 'Kharif 2024-25', source: 'CACP India' },
+    'sorghum': { crop: 'Jowar (Sorghum)', msp: 3180, unit: 'per quintal', season: 'Kharif 2024-25', source: 'CACP India' },
+    'bajra': { crop: 'Bajra (Pearl Millet)', msp: 2500, unit: 'per quintal', season: 'Kharif 2024-25', source: 'CACP India' },
+    'ragi': { crop: 'Ragi (Finger Millet)', msp: 3846, unit: 'per quintal', season: 'Kharif 2024-25', source: 'CACP India' },
+    'tur': { crop: 'Tur Dal (Arhar)', msp: 7000, unit: 'per quintal', season: 'Kharif 2024-25', source: 'CACP India' },
+    'arhar': { crop: 'Tur Dal (Arhar)', msp: 7000, unit: 'per quintal', season: 'Kharif 2024-25', source: 'CACP India' },
+    'moong': { crop: 'Green Gram (Moong)', msp: 8558, unit: 'per quintal', season: 'Kharif 2024-25', source: 'CACP India' },
+    'greengram': { crop: 'Green Gram (Moong)', msp: 8558, unit: 'per quintal', season: 'Kharif 2024-25', source: 'CACP India' },
+    'urad': { crop: 'Black Gram (Urad)', msp: 6950, unit: 'per quintal', season: 'Kharif 2024-25', source: 'CACP India' },
+    'blackgram': { crop: 'Black Gram (Urad)', msp: 6950, unit: 'per quintal', season: 'Kharif 2024-25', source: 'CACP India' },
+    'chickpea': { crop: 'Chickpea (Bengal Gram)', msp: 5440, unit: 'per quintal', season: 'Rabi 2024-25', source: 'CACP India' },
+    'chana': { crop: 'Chickpea (Bengal Gram)', msp: 5440, unit: 'per quintal', season: 'Rabi 2024-25', source: 'CACP India' },
+    'mustard': { crop: 'Mustard & Rapeseed', msp: 5650, unit: 'per quintal', season: 'Rabi 2024-25', source: 'CACP India' },
+    'sugarcane': { crop: 'Sugarcane', msp: 315, unit: 'per quintal (FRP)', season: '2024-25', source: 'CACP India' },
+    'sesame': { crop: 'Sesame (Til)', msp: 8635, unit: 'per quintal', season: 'Kharif 2024-25', source: 'CACP India' },
+    'til': { crop: 'Sesame (Til)', msp: 8635, unit: 'per quintal', season: 'Kharif 2024-25', source: 'CACP India' },
+    'jute': { crop: 'Jute', msp: 5335, unit: 'per quintal', season: 'Kharif 2024-25', source: 'CACP India' },
+    'safflower': { crop: 'Safflower', msp: 5800, unit: 'per quintal', season: 'Rabi 2024-25', source: 'CACP India' },
+    'lentil': { crop: 'Lentil (Masur)', msp: 6425, unit: 'per quintal', season: 'Rabi 2024-25', source: 'CACP India' },
+    'masur': { crop: 'Lentil (Masur)', msp: 6425, unit: 'per quintal', season: 'Rabi 2024-25', source: 'CACP India' },
+  };
+
+  const key = crop.toString().toLowerCase().trim().replace(/\s+/g, '');
+  const found = MSP_DATA[key];
+  if (found) {
+    return res.json({ success: true, ...found });
+  }
+  // Fuzzy match
+  const fuzzy = Object.entries(MSP_DATA).find(([k]) => k.includes(key) || key.includes(k));
+  if (fuzzy) {
+    return res.json({ success: true, ...fuzzy[1] });
+  }
+  res.json({ success: false, error: `MSP data not available for "${crop}". Available: rice, wheat, cotton, groundnut, maize, tur, moong, urad, chickpea, mustard, sugarcane, and more.` });
+});
+
 const voiceRateLimit = rateLimit(60000, 15); // 15 voice queries per minute per IP
 app.post('/api/voice/query', voiceRateLimit, async (req, res) => {
-  const { query, language, history, weatherContext } = req.body;
+  const { query, language, history, weatherContext, farmerProfile } = req.body;
   if (!query) return res.status(400).json({ success: false, error: 'Query is required' });
   if (typeof query !== 'string' || query.length > 2000) return res.status(400).json({ success: false, error: 'Query too long (max 2000 chars)' });
 
@@ -1952,7 +2390,14 @@ app.post('/api/voice/query', voiceRateLimit, async (req, res) => {
     : [];
 
   try {
-    const response = await askLLM(query, safeHistory, lang, weatherContext);
+    // Sanitize farmer profile (Feature #9)
+    const safeProfile = (farmerProfile && typeof farmerProfile === 'object') ? {
+      crop: typeof farmerProfile.crop === 'string' ? farmerProfile.crop.slice(0, 100) : null,
+      soil: typeof farmerProfile.soil === 'string' ? farmerProfile.soil.slice(0, 100) : null,
+      district: typeof farmerProfile.district === 'string' ? farmerProfile.district.slice(0, 100) : null,
+      landAcres: typeof farmerProfile.landAcres === 'string' ? farmerProfile.landAcres.slice(0, 20) : null,
+    } : null;
+    const response = await askLLM(query, safeHistory, lang, weatherContext, safeProfile);
     res.json({ success: true, response, language: lang });
   } catch (err) {
     console.error('Voice query error:', err);

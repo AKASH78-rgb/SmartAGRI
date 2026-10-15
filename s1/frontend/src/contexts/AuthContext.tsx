@@ -14,7 +14,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isValidating: boolean;   // true while checking stored token on mount
   login: (email: string, password: string) => Promise<void>;
-  signup: (name: string, email: string, password: string) => Promise<void>;
+  signup: (name: string, email: string, password: string, phone?: string) => Promise<void>;
   logout: () => void;
   updateUser: (fields: Partial<Omit<User, 'id' | 'email'>>) => void;
 }
@@ -78,15 +78,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (data.token) try { localStorage.setItem("smartagricare_token", data.token); } catch { /* ignore */ }
   }, []);
 
-  const signup = useCallback(async (name: string, email: string, password: string) => {
-    const data = await authAPI.register(name, email, password);
+  const signup = useCallback(async (name: string, email: string, password: string, phone = '') => {
+    const data = await authAPI.register(name, email, password, phone);
     if (!data.success) throw new Error(data.error || "Registration failed");
     if (!data.user?.id) throw new Error("Registration failed: no user ID returned");
     const u: User = {
+      ...data.user,
       id: String(data.user.id),
-      name: data.user?.name || name,
-      email: data.user?.email || email,
-      location: "Andhra Pradesh, India",
+      name: data.user.name || name,
+      email: data.user.email || email,
+      phone: data.user.phone || phone,
     };
     setUser(u);
     try { localStorage.setItem("smartagricare_user", JSON.stringify(u)); } catch { /* ignore */ }

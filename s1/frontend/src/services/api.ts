@@ -61,8 +61,8 @@ async function apiFetchWithRetry<T = any>(
 export const authAPI = {
     login: (email: string, password: string) =>
         apiFetch(`${API_BASE_URL}/api/auth/login`, { method: 'POST', body: JSON.stringify({ email, password }) }),
-    register: (name: string, email: string, password: string) =>
-        apiFetch(`${API_BASE_URL}/api/auth/register`, { method: 'POST', body: JSON.stringify({ name, email, password }) }),
+    register: (name: string, email: string, password: string, phone = '') =>
+        apiFetch(`${API_BASE_URL}/api/auth/register`, { method: 'POST', body: JSON.stringify({ name, email, password, phone }) }),
     forgotPassword: (email: string) =>
         apiFetch(`${API_BASE_URL}/api/auth/forgot-password`, { method: 'POST', body: JSON.stringify({ email }) }),
     resetPassword: (email: string, otp: string, newPassword: string) =>
@@ -143,6 +143,19 @@ export const diseaseAPI = {
         apiFetch(`${API_BASE_URL}/api/disease/reports?userId=${userId}`),
 };
 
+export interface CropRecommendationHistoryItem {
+    id: number;
+    season: string;
+    soil: string;
+    water: string;
+    district: string;
+    land: string;
+    topCrop: string;
+    topMatch: number;
+    results: Array<{ name: string; match: number; emoji?: string; period?: string; water?: string; fertilizer?: string; districts?: string[] }>;
+    createdAt: string;
+}
+
 export const cropAPI = {
     getMeta: () =>
         apiFetch(`${API_BASE_URL}/api/crop-meta`),
@@ -153,19 +166,38 @@ export const cropAPI = {
         }),
     getCropDetails: (name: string) =>
         apiFetch(`${API_BASE_URL}/api/crops/${encodeURIComponent(name)}`),
+    getHistory: () =>
+        apiFetch<{ success: boolean; history: CropRecommendationHistoryItem[] }>(`${API_BASE_URL}/api/crop-recommendations/history`),
 };
 
 export const storeAPI = {
-    getNearbyStores: (lat: number, lng: number, radius?: number) =>
-        apiFetch(`${API_BASE_URL}/api/stores/nearby?lat=${lat}&lng=${lng}${radius ? `&radius=${radius}` : ''}`, {}, 30000),
+    getNearbyStores: (lat: number | null, lng: number | null, district?: string, radius?: number) => {
+        const params = new URLSearchParams();
+        if (lat !== null && lng !== null) {
+            params.set('lat', String(lat));
+            params.set('lng', String(lng));
+        }
+        if (district) params.set('district', district);
+        if (radius) params.set('radius', String(radius));
+        return apiFetch(`${API_BASE_URL}/api/stores/nearby?${params.toString()}`, {}, 30000);
+    },
 };
 
 export const voiceAPI = {
-    processQuery: (query: string, language?: string, history?: { role: string; content: string }[], weatherContext?: any) =>
+    processQuery: (query: string, language?: string, history?: { role: string; content: string }[], weatherContext?: any, farmerProfile?: any) =>
         apiFetchWithRetry(`${API_BASE_URL}/api/voice/query`, {
             method: 'POST',
-            body: JSON.stringify({ query, language, history: history || [], weatherContext }),
+            body: JSON.stringify({ query, language, history: history || [], weatherContext, farmerProfile }),
         }, 60000, 1),
+    saveHistory: (messages: { role: string; text: string; timestamp: number }[]) =>
+        apiFetch(`${API_BASE_URL}/api/voice/history/save`, {
+            method: 'POST',
+            body: JSON.stringify({ messages }),
+        }),
+    getHistory: () =>
+        apiFetch(`${API_BASE_URL}/api/voice/history`),
+    getMarketPrice: (crop: string) =>
+        apiFetch(`${API_BASE_URL}/api/voice/market-price?crop=${encodeURIComponent(crop)}`, {}, 8000),
 };
 
 export interface SoilClimatePayload {
@@ -189,3 +221,32 @@ export const cropFertilizerAPI = {
         })
 };
 
+export const soilAPI = {
+    submitInquiry: (payload: {
+        name: string;
+        phone: string;
+        village?: string;
+        district?: string;
+        landAcres?: string;
+        crop?: string;
+        soilType?: string;
+        notes?: string;
+    }) =>
+        apiFetch(`${API_BASE_URL}/api/soil/inquiry`, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        }),
+    getInquiries: () =>
+        apiFetch<{ success: boolean; inquiries: Array<{
+            id: number;
+            name: string;
+            phone: string;
+            village: string;
+            district: string;
+            landAcres: number | null;
+            crop: string;
+            soilType: string;
+            notes: string;
+            createdAt: string;
+        }> }>(`${API_BASE_URL}/api/soil/inquiries`),
+};

@@ -10,11 +10,11 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 const languages = [
-  { code: "en" as const, name: "English", native: "English", flag: "🇬🇧" },
-  { code: "hi" as const, name: "Hindi", native: "हिंदी", flag: "🇮🇳" },
-  { code: "te" as const, name: "Telugu", native: "తెలుగు", flag: "🇮🇳" },
-  { code: "kn" as const, name: "Kannada", native: "ಕನ್ನಡ", flag: "🇮🇳" },
-  { code: "mr" as const, name: "Marathi", native: "मराठी", flag: "🇮🇳" },
+  { code: "en" as const, name: "English", native: "English", badge: "A",  badgeSub: "EN", color: "bg-blue-100 text-blue-700" },
+  { code: "hi" as const, name: "Hindi",   native: "हिंदी",   badge: "अ",  badgeSub: "HI", color: "bg-orange-100 text-orange-700" },
+  { code: "te" as const, name: "Telugu",  native: "తెలుగు",  badge: "అ",  badgeSub: "TE", color: "bg-green-100 text-green-700" },
+  { code: "kn" as const, name: "Kannada", native: "ಕನ್ನಡ",  badge: "ಅ",  badgeSub: "KN", color: "bg-purple-100 text-purple-700" },
+  { code: "mr" as const, name: "Marathi", native: "मराठी",  badge: "म",  badgeSub: "MR", color: "bg-red-100 text-red-700" },
 ];
 
 const Profile = () => {
@@ -178,7 +178,10 @@ const Profile = () => {
                       language === lang.code ? "border-accent bg-accent/5" : "border-border bg-background"
                     }`}
                   >
-                    <span className="text-2xl">{lang.flag}</span>
+                    <div className={`flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-xl ${lang.color}`}>
+                      <span className="text-base font-bold leading-none">{lang.badge}</span>
+                      <span className="text-[9px] font-semibold leading-none mt-0.5 tracking-wide opacity-70">{lang.badgeSub}</span>
+                    </div>
                     <div className="flex-1">
                       <p className="font-semibold text-foreground">{lang.native}</p>
                       <p className="text-xs text-muted-foreground">{lang.name}</p>

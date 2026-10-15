@@ -8,6 +8,25 @@
  */
 
 // ── Comprehensive Agronomic Knowledge Base ───────────────────────
+// Only crops that have images in the image/crops folder
+const CROPS_WITH_IMAGES = [
+  'rice', 'paddy', 'cotton', 'maize', 'corn', 'banana', 'coconut', 'mango',
+  'watermelon', 'muskmelon', 'black gram', 'urad', 'green gram', 'moong',
+  'red gram', 'tur dal', 'chickpea', 'bengal gram', 'lentil', 'kidneybeans',
+  'mothbeans', 'jute', 'grapes', 'orange', 'papaya', 'pomegranate', 'apple', 'coffee'
+];
+
+// Only fertilizers that have images in the image/fertilizers folder
+const AVAILABLE_FERTILIZERS = [
+  { name: 'Urea', composition: '46% N', n: 46, p: 0, k: 0, image: 'Urea.jpg' },
+  { name: 'DAP', composition: '18:46:0', n: 18, p: 46, k: 0, image: 'DAP.jpg' },
+  { name: '10-26-26', composition: '10:26:26', n: 10, p: 26, k: 26, image: '10-26-26.jpg' },
+  { name: '14-35-14', composition: '14:35:14', n: 14, p: 35, k: 14, image: '14-35-14.jpg' },
+  { name: '17-17-17', composition: '17:17:17', n: 17, p: 17, k: 17, image: '17-17-17.jpg' },
+  { name: '20-20', composition: '20:20:0', n: 20, p: 20, k: 0, image: '20-20.jpeg' },
+  { name: '28-28', composition: '28:28:0', n: 28, p: 28, k: 0, image: '28-28.jpg' },
+];
+
 const CROP_PROFILES = [
   {
     id: 'rice',
@@ -31,7 +50,8 @@ const CROP_PROFILES = [
     micronutrients: 'Zinc Sulphate (ZnSO₄ 21%): 10 kg/acre (basal to prevent Khaira disease)',
     growthPeriod: '120-150 days',
     waterRequirement: 'High',
-    description: 'High-yielding staple cereal suited for humid, warm climates with standing water or assured irrigation.'
+    description: 'High-yielding staple cereal suited for humid, warm climates with standing water or assured irrigation.',
+    image: 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?w=800&q=80'
   },
   {
     id: 'cotton',
@@ -55,7 +75,8 @@ const CROP_PROFILES = [
     micronutrients: 'Boron (Borax): 4 kg/acre + Magnesium Sulphate: 10 kg/acre against leaf reddening',
     growthPeriod: '150-180 days',
     waterRequirement: 'Moderate',
-    description: 'Deep-rooted commercial fibre crop well-adapted to black cotton and loamy soils.'
+    description: 'Deep-rooted commercial fibre crop well-adapted to black cotton and loamy soils.',
+    image: 'https://images.unsplash.com/photo-1605000797499-95a51c5269ae?w=800&q=80'
   },
   {
     id: 'maize',
@@ -79,7 +100,8 @@ const CROP_PROFILES = [
     micronutrients: 'Zinc Sulphate: 10 kg/acre basal application',
     growthPeriod: '90-110 days',
     waterRequirement: 'Moderate',
-    description: 'Fast-growing high nutrient feeder with high yield potential and market versatility.'
+    description: 'Fast-growing high nutrient feeder with high yield potential and market versatility.',
+    image: 'https://images.unsplash.com/photo-1551754655-cd27e38d2076?w=800&q=80'
   },
   {
     id: 'groundnut',
@@ -103,7 +125,8 @@ const CROP_PROFILES = [
     micronutrients: 'Gypsum (CaSO₄): 200 kg/acre at 40-45 DAS for pod filling and peg strength',
     growthPeriod: '100-130 days',
     waterRequirement: 'Low',
-    description: 'Legume oilseed that enriches soil nitrogen and thrives in light well-drained soils.'
+    description: 'Legume oilseed that enriches soil nitrogen and thrives in light well-drained soils.',
+    image: 'https://images.unsplash.com/photo-1590779033100-9f60a05a013d?w=800&q=80'
   },
   {
     id: 'chillies',
@@ -127,7 +150,8 @@ const CROP_PROFILES = [
     micronutrients: 'Micronutrient mix (Zinc, Boron, Calcium spray) at flowering',
     growthPeriod: '150-180 days',
     waterRequirement: 'Moderate',
-    description: 'High-value commercial crop demanding balanced potash and phosphorus for fruit vigor.'
+    description: 'High-value commercial crop demanding balanced potash and phosphorus for fruit vigor.',
+    image: 'https://images.unsplash.com/photo-1588252303782-cb80119abd6d?w=800&q=80'
   },
   {
     id: 'bengal_gram',
@@ -151,7 +175,8 @@ const CROP_PROFILES = [
     micronutrients: 'Rhizobium biofertilizer seed treatment + PSB (Phosphate Solubilizing Bacteria)',
     growthPeriod: '90-110 days',
     waterRequirement: 'Low',
-    description: 'Drought-tolerant cool-season pulse requiring low moisture and residual soil fertility.'
+    description: 'Drought-tolerant cool-season pulse requiring low moisture and residual soil fertility.',
+    image: 'https://images.unsplash.com/photo-1612257416648-ee7a6c533848?w=800&q=80'
   },
   {
     id: 'sugarcane',
@@ -175,7 +200,8 @@ const CROP_PROFILES = [
     micronutrients: 'Ferrous sulphate (FeSO₄): 10 kg/acre + Zinc sulphate: 15 kg/acre',
     growthPeriod: '300-365 days',
     waterRequirement: 'High',
-    description: 'Heavy feeder demanding rich organic soils, ample sunlight, and staged nitrogen applications.'
+    description: 'Heavy feeder demanding rich organic soils, ample sunlight, and staged nitrogen applications.',
+    image: 'https://images.unsplash.com/photo-1527847263472-aa5338d178b8?w=800&q=80'
   },
   {
     id: 'tomato',
@@ -199,7 +225,8 @@ const CROP_PROFILES = [
     micronutrients: 'Calcium Nitrate: 5 g/L foliar spray against blossom end rot',
     growthPeriod: '90-120 days',
     waterRequirement: 'Moderate',
-    description: 'Responsive horticultural crop benefiting from high potassium for firm, vibrant fruits.'
+    description: 'Responsive horticultural crop benefiting from high potassium for firm, vibrant fruits.',
+    image: 'https://images.unsplash.com/photo-1546094096-0df4bcaaa337?w=800&q=80'
   },
   {
     id: 'onion',
@@ -223,7 +250,8 @@ const CROP_PROFILES = [
     micronutrients: 'Sulphur (Bentonite Sulphur 90%): 10 kg/acre for pungency and storage shelf life',
     growthPeriod: '120-150 days',
     waterRequirement: 'Moderate',
-    description: 'Shallow-rooted bulb crop sensitive to water stagnation and responsive to sulphur.'
+    description: 'Shallow-rooted bulb crop sensitive to water stagnation and responsive to sulphur.',
+    image: 'https://images.unsplash.com/photo-1518977956812-cd3dbadaaf31?w=800&q=80'
   },
   {
     id: 'sunflower',
@@ -247,7 +275,8 @@ const CROP_PROFILES = [
     micronutrients: 'Boron (Solubor 0.2%): foliar spray at ray floret opening for optimal seed setting',
     growthPeriod: '90-100 days',
     waterRequirement: 'Moderate',
-    description: 'Photo-insensitive oilseed with high phosphorus requirement for seed filling.'
+    description: 'Photo-insensitive oilseed with high phosphorus requirement for seed filling.',
+    image: 'https://images.unsplash.com/photo-1597848212624-a19eb35e2651?w=800&q=80'
   },
   {
     id: 'turmeric',
@@ -271,7 +300,8 @@ const CROP_PROFILES = [
     micronutrients: 'Neem cake: 100 kg/acre + Trichoderma viride against rhizome rot',
     growthPeriod: '210-240 days',
     waterRequirement: 'Moderate',
-    description: 'High potash feeder that thrives in warm humid climates and rich humus-rich loam.'
+    description: 'High potash feeder that thrives in warm humid climates and rich humus-rich loam.',
+    image: 'https://images.unsplash.com/photo-1615485500704-8e990f9900f7?w=800&q=80'
   },
   {
     id: 'red_gram',
@@ -295,7 +325,8 @@ const CROP_PROFILES = [
     micronutrients: 'Sulphur 20 kg/ha for protein synthesis + Rhizobium seed inoculation',
     growthPeriod: '150-180 days',
     waterRequirement: 'Low',
-    description: 'Deep taproot pulse capable of extracting moisture from subsoil; fixes nitrogen.'
+    description: 'Deep taproot pulse capable of extracting moisture from subsoil; fixes nitrogen.',
+    image: 'https://images.unsplash.com/photo-1585011664466-b7bbe92f34ef?w=800&q=80'
   }
 ];
 
@@ -312,7 +343,13 @@ function calcParamScore(val, [min, max]) {
 function runCropRecommendationAgent(soilInput) {
   const { n, p, k, ph, temperature, humidity, rainfall } = soilInput;
 
-  const scoredCrops = CROP_PROFILES.map(crop => {
+  // Filter to only crops that have images in the crops folder
+  const eligibleCrops = CROP_PROFILES.filter(crop => {
+    const cropName = crop.name.toLowerCase();
+    return CROPS_WITH_IMAGES.some(imgCrop => cropName.includes(imgCrop.toLowerCase()) || imgCrop.toLowerCase().includes(cropName.split(' ')[0]));
+  });
+
+  const scoredCrops = eligibleCrops.map(crop => {
     const r = crop.optimalRanges;
     const nScore = calcParamScore(n, r.n);
     const pScore = calcParamScore(p, r.p);
@@ -460,30 +497,43 @@ function runFertilizerRecommendationAgent(selectedCrop, soilInput, language = 'e
   const recDapAcre = adjustDose(baseDosage.dap, deltaP, target.p);
   const recMopAcre = adjustDose(baseDosage.mop, deltaK, target.k);
 
-  // Determine Primary Fertilizer Cocktail
-  let fertilizerTypeName = '';
-  const components = [];
-  if (recUreaAcre > 0) components.push(`Urea (46% N)`);
-  if (recDapAcre > 0) components.push(`DAP (18:46:0)`);
-  if (recMopAcre > 0) components.push(`MOP (60% K₂O)`);
-  if (components.length > 0) {
-    fertilizerTypeName = components.join(' + ');
-  } else {
-    fertilizerTypeName = 'Organic Farmyard Manure (FYM) + Biofertilizers';
+  // Determine Primary Fertilizer Cocktail (only fertilizers with images)
+  // Select the best fertilizer from AVAILABLE_FERTILIZERS based on NPK requirements
+  let bestFertilizer = null;
+  let bestMatchScore = -1;
+
+  for (const fert of AVAILABLE_FERTILIZERS) {
+    // Calculate match score based on how well the fertilizer's NPK ratio matches the crop's needs
+    const nRatio = fert.n / (target.n || 1);
+    const pRatio = fert.p / (target.p || 1);
+    const kRatio = fert.k / (target.k || 1);
+
+    // Calculate similarity score (lower deviation = better match)
+    const nDev = Math.abs(nRatio - 1);
+    const pDev = Math.abs(pRatio - 1);
+    const kDev = Math.abs(kRatio - 1);
+
+    // Weighted score: prioritize N and P more than K for most crops
+    const score = 100 - (nDev * 40 + pDev * 35 + kDev * 25);
+
+    if (score > bestMatchScore) {
+      bestMatchScore = score;
+      bestFertilizer = fert;
+    }
   }
 
-  // Dosage summary string
-  const dosageSummary = `Urea: ${recUreaAcre} kg/acre | DAP: ${recDapAcre} kg/acre | MOP: ${recMopAcre} kg/acre`;
+  let fertilizerTypeName = bestFertilizer ? `${bestFertilizer.name} (${bestFertilizer.composition})` : 'Urea (46% N)';
 
-  // Application Schedule (Staged Split Application)
+  // Dosage summary string - using selected fertilizer
+  const dosageSummary = `${fertilizerTypeName}: ${Math.round(recUreaAcre + recDapAcre + recMopAcre)} kg/acre total`;
+
+  // Application Schedule (Staged Split Application) - adapted for selected fertilizer
   const schedule = [
     {
       stage: 'Basal Dressing (At Sowing / Transplanting)',
       timing: 'Day 0 (Pre-sowing / at planting)',
       items: [
-        `100% DAP (${recDapAcre} kg/acre) placed 5cm below seed zone`,
-        `100% MOP (${recMopAcre} kg/acre) for root establishment and cold/drought resistance`,
-        recUreaAcre > 25 ? `25% Urea (${Math.round(recUreaAcre * 0.25)} kg/acre) as starter nitrogen` : null,
+        `100% ${fertilizerTypeName} (${Math.round(recUreaAcre + recDapAcre + recMopAcre)} kg/acre) placed 5cm below seed zone`,
         selectedCrop.micronutrients ? selectedCrop.micronutrients : null,
       ].filter(Boolean),
       purpose: 'Stimulates vigorous root system and early vegetative seedling vigor.'
@@ -492,8 +542,8 @@ function runFertilizerRecommendationAgent(selectedCrop, soilInput, language = 'e
       stage: '1st Top Dressing (Active Vegetative / Tillering)',
       timing: selectedCrop.growthPeriod.includes('150') ? 'Day 25 - 30' : 'Day 20 - 25',
       items: [
-        `50% Urea (${Math.round(recUreaAcre * 0.50)} kg/acre)`,
-        'Irrigate field within 24-48 hours of application'
+        'Irrigate field within 24-48 hours of application',
+        'Monitor crop health and growth stage'
       ],
       purpose: 'Maximizes chlorophyll production, leaf canopy expansion, and tiller count.'
     },
@@ -501,7 +551,8 @@ function runFertilizerRecommendationAgent(selectedCrop, soilInput, language = 'e
       stage: '2nd Top Dressing (Panicle Initiation / Flowering)',
       timing: selectedCrop.growthPeriod.includes('150') ? 'Day 50 - 60' : 'Day 40 - 45',
       items: [
-        recUreaAcre > 25 ? `Remaining 25% Urea (${Math.round(recUreaAcre * 0.25)} kg/acre)` : 'Foliar micronutrient or 19-19-19 spray',
+        'Foliar micronutrient spray if needed',
+        'Check for pest and disease incidence'
       ],
       purpose: 'Supports flower retention, pod/grain filling, and test weight.'
     }
@@ -510,13 +561,13 @@ function runFertilizerRecommendationAgent(selectedCrop, soilInput, language = 'e
   // Detailed Reason tying selected crop to farmer's soil values
   let reason = '';
   if (selectedCrop.category.includes('Legume') || selectedCrop.category.includes('Pulse')) {
-    reason = `As ${selectedCrop.name} is a nitrogen-fixing legume, its nitrogen target is modest (${target.n} kg/ha). Your soil test shows N at ${n} kg/ha. DAP (${recDapAcre} kg/acre) provides the required root-building phosphorus (${target.p} kg/ha target vs ${p} kg/ha current), with minimal supplemental urea to preserve nodule formation.`;
+    reason = `As ${selectedCrop.name} is a nitrogen-fixing legume, its nitrogen target is modest (${target.n} kg/ha). Your soil test shows N at ${n} kg/ha. ${fertilizerTypeName} provides the required root-building phosphorus (${target.p} kg/ha target vs ${p} kg/ha current), with minimal supplemental nitrogen to preserve nodule formation.`;
   } else if (deltaN > 25) {
-    reason = `For ${selectedCrop.name}, optimal yield requires high nitrogen (${target.n} kg/ha), but your measured soil nitrogen is low (${n} kg/ha, a deficit of ${Math.round(deltaN)} kg/ha). To correct this deficit without nitrogen leaching, apply ${recDapAcre} kg/acre DAP at sowing for phosphorus, and split ${recUreaAcre} kg/acre Urea into two top dressings.`;
+    reason = `For ${selectedCrop.name}, optimal yield requires high nitrogen (${target.n} kg/ha), but your measured soil nitrogen is low (${n} kg/ha, a deficit of ${Math.round(deltaN)} kg/ha). To correct this deficit without nitrogen leaching, apply ${fertilizerTypeName} at sowing to provide balanced nutrients for optimal growth.`;
   } else if (deltaN < -20) {
-    reason = `Your soil contains high reserve Nitrogen (${n} kg/ha vs ${target.n} kg/ha required by ${selectedCrop.name}). Recommended Urea has been reduced to ${recUreaAcre} kg/acre to prevent excessive vegetative lodging, pest vulnerability, and delayed maturity.`;
+    reason = `Your soil contains high reserve Nitrogen (${n} kg/ha vs ${target.n} kg/ha required by ${selectedCrop.name}). Recommended ${fertilizerTypeName} dosage has been adjusted to prevent excessive vegetative lodging, pest vulnerability, and delayed maturity.`;
   } else {
-    reason = `For ${selectedCrop.name}, current soil NPK (${n}:${p}:${k}) moderately satisfies the crop's target (${target.n}:${target.p}:${target.k} kg/ha). Applying ${recDapAcre} kg DAP and ${recMopAcre} kg MOP at sowing ensures balanced root establishment, while ${recUreaAcre} kg Urea maintains canopy vigor through reproductive stages.`;
+    reason = `For ${selectedCrop.name}, current soil NPK (${n}:${p}:${k}) moderately satisfies the crop's target (${target.n}:${target.p}:${target.k} kg/ha). Applying ${fertilizerTypeName} ensures balanced nutrient availability throughout the growth cycle.`;
   }
 
   if (phRemedy) {
@@ -537,6 +588,7 @@ function runFertilizerRecommendationAgent(selectedCrop, soilInput, language = 'e
     deficiencies,
     excesses,
     fertilizerType: fertilizerTypeName,
+    fertilizerImage: bestFertilizer ? bestFertilizer.image : 'Urea.jpg',
     dosage: dosageSummary,
     dosagePerAcre: {
       urea: `${recUreaAcre} kg/acre`,
@@ -554,7 +606,163 @@ function runFertilizerRecommendationAgent(selectedCrop, soilInput, language = 'e
   };
 }
 
-// ── 3. CENTRAL AI COORDINATOR ────────────────────────────────────
+// ── 4. CROP CALENDAR AGENT ────────────────────────────────────────
+/**
+ * Generates a week-by-week crop calendar with:
+ * - Sowing / transplanting window
+ * - Key growth milestones
+ * - Irrigation checkpoints
+ * - Pest & disease watch periods
+ * - Harvest window
+ */
+function runCropCalendarAgent(selectedCrop, soilInput) {
+  const { temperature, rainfall } = soilInput;
+
+  // Determine sowing month based on season
+  const today = new Date();
+  const currentMonth = today.getMonth(); // 0-indexed
+
+  // Season → typical sowing month (India)
+  const SEASON_SOWING_MONTH = {
+    'Kharif':  5,  // June
+    'Rabi':    9,  // October
+    'Annual':  1,  // February (sugarcane)
+    'Kharif / Rabi': currentMonth < 5 ? 1 : 5,
+    'Rabi / Kharif': 9,
+  };
+
+  const sowingMonthIdx = SEASON_SOWING_MONTH[selectedCrop.season] ?? 5;
+  const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  // Parse growth period to total days
+  const gpMatch = selectedCrop.growthPeriod.match(/(\d+)/);
+  const totalDays = gpMatch ? parseInt(gpMatch[1]) : 120;
+
+  // Build milestone events
+  const milestones = [];
+
+  milestones.push({
+    week: 0,
+    day: '0',
+    event: 'Sowing / Transplanting',
+    type: 'sowing',
+    icon: '🌱',
+    detail: `Sow in ${MONTH_NAMES[sowingMonthIdx]}. Ensure soil moisture ≥ 60% field capacity. ${
+      selectedCrop.waterRequirement === 'High' ? 'Pre-sow irrigation recommended.' : 'Avoid waterlogging.'
+    }`,
+  });
+
+  milestones.push({
+    week: 2,
+    day: '10-14',
+    event: 'Germination / Seedling Establishment',
+    type: 'growth',
+    icon: '🌿',
+    detail: `Check germination (≥ 80% target). Thin seedlings if overcrowded. Watch for damping-off fungal disease.`,
+  });
+
+  const veg1Day = Math.round(totalDays * 0.2);
+  milestones.push({
+    week: Math.round(veg1Day / 7),
+    day: `${veg1Day}`,
+    event: 'Vegetative Growth / Tillering',
+    type: 'growth',
+    icon: '🌾',
+    detail: `Apply 1st top dressing fertilizer. Irrigate every ${
+      selectedCrop.waterRequirement === 'High' ? '5-7' : selectedCrop.waterRequirement === 'Moderate' ? '10-12' : '14-18'
+    } days. Watch for ${selectedCrop.category.includes('Cereal') ? 'stem borer and leaf blast' : 'aphids and leaf curl virus'}.`,
+  });
+
+  const veg2Day = Math.round(totalDays * 0.4);
+  milestones.push({
+    week: Math.round(veg2Day / 7),
+    day: `${veg2Day}`,
+    event: 'Flowering / Panicle Initiation',
+    type: 'critical',
+    icon: '🌸',
+    detail: `Critical water stress period — do NOT skip irrigation. Apply 2nd top dressing. ${
+      temperature > 35 ? '⚠️ High temperature risk — irrigate in evening.' : 'Maintain soil moisture at field capacity.'
+    } Spray micronutrients if deficiency symptoms visible.`,
+  });
+
+  const podDay = Math.round(totalDays * 0.65);
+  milestones.push({
+    week: Math.round(podDay / 7),
+    day: `${podDay}`,
+    event: 'Grain Filling / Pod Development',
+    type: 'critical',
+    icon: '🌰',
+    detail: `Potassium uptake is highest now — ensure no K deficiency. Watch for ${
+      selectedCrop.category.includes('Pulse') ? 'pod borer' : selectedCrop.category.includes('Vegetable') ? 'fruit borer and mites' : 'sheath blight and rust'
+    }. Reduce irrigation frequency gradually.`,
+  });
+
+  const matureDay = Math.round(totalDays * 0.85);
+  milestones.push({
+    week: Math.round(matureDay / 7),
+    day: `${matureDay}`,
+    event: 'Maturation / Pre-harvest',
+    type: 'harvest',
+    icon: '🟡',
+    detail: `Stop irrigation 7-10 days before harvest. ${rainfall > 800 ? 'Drain field if waterlogged.' : 'Withhold irrigation.'} Grain moisture should reach 20-25% for combine harvesting.`,
+  });
+
+  milestones.push({
+    week: Math.round(totalDays / 7),
+    day: `${totalDays}`,
+    event: 'Harvest Window',
+    type: 'harvest',
+    icon: '🚜',
+    detail: `Harvest when ${
+      selectedCrop.category.includes('Cereal') || selectedCrop.category.includes('Grain') ? '85% of grains turn golden and leaves dry' :
+      selectedCrop.category.includes('Pulse') ? '80% pods turn brown/dry' :
+      selectedCrop.category.includes('Vegetable') ? 'fruits reach desired size and colour' :
+      'crop reaches physiological maturity'
+    }. Expected yield: ${selectedCrop.growthPeriod ? selectedCrop.growthPeriod + ' crop' : 'varies by variety'}.`,
+  });
+
+  // Irrigation schedule summary
+  const irrigationSchedule = [
+    { stage: 'Pre-sowing', frequency: 'Once', note: 'Moisture priming' },
+    {
+      stage: 'Vegetative (0-40% growth)',
+      frequency: selectedCrop.waterRequirement === 'High' ? 'Every 5-7 days' : selectedCrop.waterRequirement === 'Moderate' ? 'Every 10 days' : 'Every 14 days',
+      note: 'Maintain 60% field capacity',
+    },
+    {
+      stage: 'Flowering (40-65% growth)',
+      frequency: selectedCrop.waterRequirement === 'High' ? 'Every 4-5 days' : 'Every 7-8 days',
+      note: '⚠️ Critical — never skip',
+    },
+    {
+      stage: 'Grain / Pod Filling',
+      frequency: selectedCrop.waterRequirement === 'High' ? 'Every 7 days' : 'Every 12 days',
+      note: 'Reduce gradually',
+    },
+    { stage: 'Pre-harvest', frequency: 'Stop', note: '7-10 days before harvest' },
+  ];
+
+  // Pest watch calendar
+  const pestAlerts = [
+    { period: `Week 2-4`, pest: selectedCrop.category.includes('Cereal') ? 'Stem borer, Army worm' : selectedCrop.category.includes('Pulse') ? 'Aphids, Whitefly' : 'Damping-off, Cutworm', action: 'Scout weekly; spray neem oil (3ml/L) if infestation >5%' },
+    { period: `Week ${Math.round(veg1Day / 7)}-${Math.round(podDay / 7)}`, pest: selectedCrop.category.includes('Cereal') ? 'Leaf blast, Brown plant hopper' : selectedCrop.category.includes('Oilseed') ? 'Alternaria leaf blight, Aphids' : 'Powdery mildew, Spider mites', action: 'Spray Mancozeb 2.5g/L or Imidacloprid 0.5ml/L at first sign' },
+    { period: `Week ${Math.round(podDay / 7)}-harvest`, pest: selectedCrop.category.includes('Pulse') ? 'Pod borer (Helicoverpa)' : selectedCrop.category.includes('Vegetable') ? 'Fruit fly, Thrips' : 'Sheath blight, Grain discolouration', action: 'Use pheromone traps; spray recommended insecticide at ETL' },
+  ];
+
+  // Harvest month estimate
+  const harvestMonthIdx = (sowingMonthIdx + Math.round(totalDays / 30)) % 12;
+
+  return {
+    sowingMonth: MONTH_NAMES[sowingMonthIdx],
+    harvestMonth: MONTH_NAMES[harvestMonthIdx],
+    totalGrowthDays: totalDays,
+    milestones,
+    irrigationSchedule,
+    pestAlerts,
+  };
+}
+
+
 /**
  * Shares findings between Crop Agent and Fertilizer Agent through
  * a central coordinator to produce one cohesive collective intelligence result.
@@ -578,6 +786,9 @@ async function coordinateCropAndFertilizer(soilInput, language = 'en', llmHelper
   // Step 2: Fertilizer Agent takes selected crop AND original soil NPK data
   const fertilizerAgentResult = runFertilizerRecommendationAgent(selectedCrop, parsed, language);
 
+  // Step 4: Crop Calendar Agent
+  const calendarAgentResult = runCropCalendarAgent(selectedCrop, parsed);
+
   // Step 3: Central Coordinator computes Soil Health Index & Pipeline Synthesis
   const soilHealthScore = Math.min(100, Math.max(30, Math.round(
     (fertilizerAgentResult.nutrientStatus.n.percentOfTarget <= 100 ? fertilizerAgentResult.nutrientStatus.n.percentOfTarget : 200 - fertilizerAgentResult.nutrientStatus.n.percentOfTarget) * 0.35 +
@@ -592,7 +803,8 @@ async function coordinateCropAndFertilizer(soilInput, language = 'en', llmHelper
     { step: 2, name: 'AI Crop Recommendation Agent', status: 'Completed', detail: `Analyzed climate and soil suitability across 12 crop profiles` },
     { step: 3, name: 'Best Crop Selection', status: 'Completed', detail: `${selectedCrop.emoji} ${selectedCrop.name} (${cropAgentResult.confidence}% confidence)` },
     { step: 4, name: 'Nutrient Gap Analysis', status: 'Completed', detail: `Mapped measured soil against ${selectedCrop.name} nutrient requirements (${selectedCrop.targetNPK.n}:${selectedCrop.targetNPK.p}:${selectedCrop.targetNPK.k})` },
-    { step: 5, name: 'AI Fertilizer Recommendation Agent', status: 'Completed', detail: `Formulated ${fertilizerAgentResult.fertilizerType} dosage and stage schedule` }
+    { step: 5, name: 'AI Fertilizer Recommendation Agent', status: 'Completed', detail: `Formulated ${fertilizerAgentResult.fertilizerType} dosage and stage schedule` },
+    { step: 6, name: 'Crop Calendar Agent', status: 'Completed', detail: `Generated ${calendarAgentResult.totalGrowthDays}-day crop calendar: sow ${calendarAgentResult.sowingMonth} → harvest ${calendarAgentResult.harvestMonth}` },
   ];
 
   // Optional LLM enrichment if available and requested
@@ -620,7 +832,7 @@ Language: ${language}. Keep it clear, empowering, and actionable.`;
     soilClimateInput: parsed,
     coordinatorSynthesis: {
       soilHealthScore,
-      summary: `AI Collective Intelligence successfully unified Crop and Fertilizer plans for ${selectedCrop.name}.`,
+      summary: `Soil report (N: ${parsed.n} kg/ha, P: ${parsed.p} kg/ha, K: ${parsed.k} kg/ha, pH: ${parsed.ph}, temperature: ${parsed.temperature}°C, humidity: ${parsed.humidity}%, rainfall: ${parsed.rainfall}mm) — Soil Health Score: ${soilHealthScore}/100. Best-matching crop: ${selectedCrop.name} (${cropAgentResult.confidence}% confidence). Target NPK for ${selectedCrop.name}: ${selectedCrop.targetNPK.n}:${selectedCrop.targetNPK.p}:${selectedCrop.targetNPK.k}. Nutrient status: ${fertilizerAgentResult.deficiencies.length ? 'Deficiencies detected in ' + fertilizerAgentResult.deficiencies.join(', ') + '.' : 'No major nutrient deficiencies detected — balanced soil.'} Recommended fertilizer: ${fertilizerAgentResult.fertilizerType} at ${fertilizerAgentResult.dosage}.`,
       insight: coordinatorInsight,
       pipelineFlow
     },
@@ -629,6 +841,7 @@ Language: ${language}. Keep it clear, empowering, and actionable.`;
       teluguName: selectedCrop.teluguName,
       hindiName: selectedCrop.hindiName,
       emoji: selectedCrop.emoji,
+      image: selectedCrop.image || '',
       category: selectedCrop.category,
       season: selectedCrop.season,
       growthPeriod: selectedCrop.growthPeriod,
@@ -661,8 +874,10 @@ Language: ${language}. Keep it clear, empowering, and actionable.`;
       dosagePerHectare: fertilizerAgentResult.dosagePerHectare,
       schedule: fertilizerAgentResult.schedule,
       reason: fertilizerAgentResult.reason,
-      micronutrients: selectedCrop.micronutrients
-    }
+      micronutrients: selectedCrop.micronutrients,
+      image: fertilizerAgentResult.fertilizerImage || 'Urea.jpg'
+    },
+    cropCalendar: calendarAgentResult,
   };
 }
 
@@ -670,5 +885,6 @@ module.exports = {
   CROP_PROFILES,
   runCropRecommendationAgent,
   runFertilizerRecommendationAgent,
+  runCropCalendarAgent,
   coordinateCropAndFertilizer
 };

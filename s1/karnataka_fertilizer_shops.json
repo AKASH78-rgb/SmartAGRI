@@ -1,0 +1,258 @@
+[
+  {
+    "district": "Bagalkot",
+    "name": "DHANESHWARI TRADERS",
+    "phone": "9448404710",
+    "products": "Urea, DAP, MOP",
+    "lat": 16.1867,
+    "lng": 75.6961
+  },
+  {
+    "district": "Bagalkot",
+    "name": "SADASHIVA TRADERS",
+    "phone": "9448645904",
+    "products": "Urea, NPK 10:26:26, SSP",
+    "lat": 16.1867,
+    "lng": 75.6961
+  },
+  {
+    "district": "Bagalkot",
+    "name": "SHRI BASAVESHWARA KRISHI KENDR",
+    "phone": "9448647042",
+    "products": "DAP, MOP, Zinc Sulphate",
+    "lat": 16.1867,
+    "lng": 75.6961
+  },
+  {
+    "district": "Belagavi",
+    "name": "SHRI RAM FERTILISERS",
+    "phone": "9483028392",
+    "products": "Urea, NPK 20:20:0:13, Gypsum",
+    "lat": 15.8497,
+    "lng": 74.4977
+  },
+  {
+    "district": "Belagavi",
+    "name": "P M HAMPANNAVAR",
+    "phone": "9742379977",
+    "products": "DAP, SSP, Bio-fertilizers",
+    "lat": 15.8497,
+    "lng": 74.4977
+  },
+  {
+    "district": "Belagavi",
+    "name": "PRATIBHA KRISHI SEVA KENDRA",
+    "phone": "9986836220",
+    "products": "Urea, MOP, Micronutrient mix",
+    "lat": 15.8497,
+    "lng": 74.4977
+  },
+  {
+    "district": "Davanagere",
+    "name": "KONDAJJI RUDRAPPA & SONS",
+    "phone": "9449828544",
+    "products": "Urea, DAP, MOP",
+    "lat": 14.4644,
+    "lng": 75.9218
+  },
+  {
+    "district": "Davanagere",
+    "name": "ANABERU RANGANATHA AGRO AGENCI",
+    "phone": "9448872838",
+    "products": "Urea, NPK 10:26:26, SSP",
+    "lat": 14.4644,
+    "lng": 75.9218
+  },
+  {
+    "district": "Davanagere",
+    "name": "RAIKAR TRADERS",
+    "phone": "9986226295",
+    "products": "DAP, MOP, Zinc Sulphate",
+    "lat": 14.4644,
+    "lng": 75.9218
+  },
+  {
+    "district": "Dharwad",
+    "name": "MUNAVALLI SHETAKI BHANDAR",
+    "phone": "9845222464",
+    "products": "Urea, NPK 20:20:0:13, Gypsum",
+    "lat": 15.4589,
+    "lng": 75.0078
+  },
+  {
+    "district": "Dharwad",
+    "name": "KARNATAKA AGRO CHEMICALS",
+    "phone": "9845070568",
+    "products": "DAP, SSP, Bio-fertilizers",
+    "lat": 15.4589,
+    "lng": 75.0078
+  },
+  {
+    "district": "Dharwad",
+    "name": "SHRI SAMARTH AGRO CHEMICALS",
+    "phone": "9448529680",
+    "products": "Urea, MOP, Micronutrient mix",
+    "lat": 15.4589,
+    "lng": 75.0078
+  },
+  {
+    "district": "Gadag",
+    "name": "SHRI CHANNAVEERESHWARA AGRO KE",
+    "phone": "9448922199",
+    "products": "Urea, DAP, MOP",
+    "lat": 15.4166,
+    "lng": 75.627
+  },
+  {
+    "district": "Gadag",
+    "name": "LAXMI VISHNU TRADING CO.",
+    "phone": "9449004350",
+    "products": "Urea, NPK 10:26:26, SSP",
+    "lat": 15.4166,
+    "lng": 75.627
+  },
+  {
+    "district": "Gadag",
+    "name": "MARUTHI FERTILISERS & GEN.MERC",
+    "phone": "9448223733",
+    "products": "DAP, MOP, Zinc Sulphate",
+    "lat": 15.4166,
+    "lng": 75.627
+  },
+  {
+    "district": "Haveri",
+    "name": "HEGDE KATTI AGRO AGENCIES",
+    "phone": "9448838578",
+    "products": "Urea, NPK 20:20:0:13, Gypsum",
+    "lat": 14.7951,
+    "lng": 75.3991
+  },
+  {
+    "district": "Haveri",
+    "name": "SRI MALLIKARJUNA AGRO TRADERS",
+    "phone": "9448389388",
+    "products": "DAP, SSP, Bio-fertilizers",
+    "lat": 14.7951,
+    "lng": 75.3991
+  },
+  {
+    "district": "Haveri",
+    "name": "VENKATESHWAR AGRO CENTRE",
+    "phone": "9449859521",
+    "products": "Urea, MOP, Micronutrient mix",
+    "lat": 14.7951,
+    "lng": 75.3991
+  },
+  {
+    "district": "Chitradurga",
+    "name": "VISHWAS AGRI CLINIC",
+    "phone": "9845285365",
+    "products": "Urea, DAP, MOP",
+    "lat": 14.2251,
+    "lng": 76.398
+  },
+  {
+    "district": "Chitradurga",
+    "name": "VIVEKANANDA SWAMY FERTILIZERS",
+    "phone": "9900199886",
+    "products": "Urea, NPK 10:26:26, SSP",
+    "lat": 14.2251,
+    "lng": 76.398
+  },
+  {
+    "district": "Chitradurga",
+    "name": "SHRI BALAJI AGRO CENTRE",
+    "phone": "9448416001",
+    "products": "DAP, MOP, Zinc Sulphate",
+    "lat": 14.2251,
+    "lng": 76.398
+  },
+  {
+    "district": "Uttara Kannada",
+    "name": "ANNAPURNA TRADERS",
+    "phone": "9008075499",
+    "products": "Urea, NPK 20:20:0:13, Gypsum",
+    "lat": 14.8136,
+    "lng": 74.1295
+  },
+  {
+    "district": "Vijayapura",
+    "name": "M/S. C M WARAD",
+    "phone": "9448646076",
+    "products": "DAP, SSP, Bio-fertilizers",
+    "lat": 16.8302,
+    "lng": 75.71
+  },
+  {
+    "district": "Vijayapura",
+    "name": "GAYATHRI TRADERS",
+    "phone": "9448829639",
+    "products": "Urea, MOP, Micronutrient mix",
+    "lat": 16.8302,
+    "lng": 75.71
+  },
+  {
+    "district": "Vijayapura",
+    "name": "SHETTY ENTERPRISES",
+    "phone": "9448103064",
+    "products": "Urea, DAP, MOP",
+    "lat": 16.8302,
+    "lng": 75.71
+  },
+  {
+    "district": "Shivamogga",
+    "name": "SRI RENUKA TRADERS",
+    "phone": "9448286570",
+    "products": "Urea, NPK 10:26:26, SSP",
+    "lat": 13.9299,
+    "lng": 75.5681
+  },
+  {
+    "district": "Shivamogga",
+    "name": "CHETAN TRADERS",
+    "phone": "9986453813",
+    "products": "DAP, MOP, Zinc Sulphate",
+    "lat": 13.9299,
+    "lng": 75.5681
+  },
+  {
+    "district": "Shivamogga",
+    "name": "SRI BHAVANI AGRO AGENCIES",
+    "phone": "9448142784",
+    "products": "Urea, NPK 20:20:0:13, Gypsum",
+    "lat": 13.9299,
+    "lng": 75.5681
+  },
+  {
+    "district": "Chikkaballapur",
+    "name": "KSCMF Ltd., branch",
+    "phone": "08156-272456",
+    "products": "DAP, SSP, Bio-fertilizers",
+    "lat": 13.4355,
+    "lng": 77.7315
+  },
+  {
+    "district": "Chitradurga",
+    "name": "KSCMF Ltd., branch",
+    "phone": "08194-222599",
+    "products": "Urea, MOP, Micronutrient mix",
+    "lat": 14.2251,
+    "lng": 76.398
+  },
+  {
+    "district": "Davanagere",
+    "name": "KSCMF Ltd., branch",
+    "phone": "08192-257705",
+    "products": "Urea, DAP, MOP",
+    "lat": 14.4644,
+    "lng": 75.9218
+  },
+  {
+    "district": "Shivamogga",
+    "name": "KSCMF Ltd., branch",
+    "phone": "08182-222953",
+    "products": "Urea, NPK 10:26:26, SSP",
+    "lat": 13.9299,
+    "lng": 75.5681
+  }
+]

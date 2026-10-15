@@ -10,24 +10,71 @@ import {
   Sparkles,
   ArrowRight,
   TrendingUp,
-  Droplets,
-  CloudRain,
-  Thermometer,
   ShieldAlert,
   ShieldCheck,
-  Calendar,
   Layers,
   MapPin,
   RefreshCw,
   Info,
-  CheckCircle2,
-  ChevronDown,
-  ChevronUp,
-  Volume2,
-  Share2
+  Download,
+  CalendarDays,
+  Droplets,
+  Gauge,
+  Bug
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import cropFertilizerHero from "/crop-fertilizer.jpg";
+
+// Crop image mapping - only crops that have images in the image/crops folder
+const getCropImage = (cropName: string): string => {
+  const cropImages: Record<string, string> = {
+    "Rice": "/rice.jpg",
+    "Paddy": "/rice.jpg",
+    "Cotton": "/cotton.jpg",
+    "Maize": "/maize.jpg",
+    "Corn": "/maize.jpg",
+    "Apple": "/apple.jpg",
+    "Banana": "/banana.jpg",
+    "Blackgram": "/blackgram.jpg",
+    "Chickpea": "/chickpea.jpg",
+    "Coconut": "/coconut.jpg",
+    "Coffee": "/coffee.jpg",
+    "Grapes": "/grapes.jpg",
+    "Jute": "/jute.jpg",
+    "Kidneybeans": "/kidneybeans.jpg",
+    "Lentil": "/lentil.jpg",
+    "Mango": "/mango.jpg",
+    "Mothbeans": "/mothbeans.jpg",
+    "Mungbean": "/mungbean.jpg",
+    "Muskmelon": "/muskmelon.jpg",
+    "Orange": "/orange.jpg",
+    "Papaya": "/papaya.jpg",
+    "Pigeonpeas": "/pigeonpeas.jpg",
+    "Pomegranate": "/pomegranate.jpg",
+    "Watermelon": "/watermelon.jpg",
+  };
+  return cropImages[cropName] || "/crop.jpg";
+};
+
+const getFertilizerImage = (fertilizerType: string, image?: string): string => {
+  const fertilizerImages: Record<string, string> = {
+    "10-26-26": "/10-26-26.jpg",
+    "14-35-14": "/14-35-14.jpg",
+    "17-17-17": "/17-17-17.jpg",
+    "20-20": "/20-20.jpeg",
+    "28-28": "/28-28.jpg",
+    "dap": "/DAP.jpg",
+    "urea": "/Urea.jpg",
+  };
+  const normalizedType = fertilizerType.trim().toLowerCase();
+  const matchingType = Object.keys(fertilizerImages).find((name) => normalizedType.startsWith(name));
+  if (matchingType) return fertilizerImages[matchingType];
+
+  const localFilename = image?.split(/[\\/]/).pop()?.toLowerCase();
+  const matchingImage = Object.entries(fertilizerImages).find(([, src]) => src.slice(1).toLowerCase() === localFilename);
+  return matchingImage?.[1] || "/Urea.jpg";
+};
 
 interface AnalysisResult {
   success: boolean;
@@ -43,6 +90,7 @@ interface AnalysisResult {
     teluguName?: string;
     hindiName?: string;
     emoji: string;
+    image?: string;
     category: string;
     season: string;
     growthPeriod: string;
@@ -71,6 +119,7 @@ interface AnalysisResult {
   };
   fertilizerRecommendation: {
     fertilizerType: string;
+    image?: string;
     dosage: string;
     dosagePerAcre: {
       urea: string;
@@ -92,37 +141,127 @@ interface AnalysisResult {
     reason: string;
     micronutrients?: string;
   };
+  cropCalendar: {
+    sowingMonth: string;
+    harvestMonth: string;
+    totalGrowthDays: number;
+    milestones: Array<{ week: number; day: string; event: string; type: string; detail: string }>;
+    irrigationSchedule: Array<{ stage: string; frequency: string; note: string }>;
+    pestAlerts: Array<{ period: string; pest: string; action: string }>;
+  };
 }
 
-const PRESETS = [
-  {
-    id: "coastal_paddy",
-    title: "Alluvial Delta (Paddy)",
-    emoji: "🌾",
-    data: { n: 90, p: 42, k: 43, ph: 6.5, temperature: 28, humidity: 75, rainfall: 950 }
-  },
-  {
-    id: "black_cotton",
-    title: "Black Soil (Cotton/Chilli)",
-    emoji: "🏵️",
-    data: { n: 95, p: 35, k: 65, ph: 7.6, temperature: 31, humidity: 55, rainfall: 650 }
-  },
-  {
-    id: "red_loam",
-    title: "Red Loam (Groundnut)",
-    emoji: "🥜",
-    data: { n: 25, p: 30, k: 35, ph: 6.4, temperature: 30, humidity: 50, rainfall: 550 }
-  },
-  {
-    id: "dryland_rabi",
-    title: "Dryland (Bengal Gram)",
-    emoji: "🫘",
-    data: { n: 28, p: 40, k: 25, ph: 7.2, temperature: 22, humidity: 45, rainfall: 320 }
+const downloadFarmPlanPdf = async (result: AnalysisResult) => {
+  const { jsPDF } = await import("jspdf");
+  const pdf = new jsPDF();
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const margin = 16;
+  const textWidth = pageWidth - margin * 2;
+  let y = 20;
+
+  const ensureSpace = (height: number) => {
+    if (y + height > pageHeight - margin) {
+      pdf.addPage();
+      y = 20;
+    }
+  };
+
+  const addParagraph = (text: string, fontSize = 10) => {
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(fontSize);
+    const lines = pdf.splitTextToSize(text, textWidth) as string[];
+    ensureSpace(lines.length * 5 + 2);
+    pdf.text(lines, margin, y);
+    y += lines.length * 5 + 2;
+  };
+
+  const addSection = (title: string) => {
+    ensureSpace(13);
+    y += 2;
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(12);
+    pdf.setTextColor(5, 110, 73);
+    pdf.text(title, margin, y);
+    y += 7;
+    pdf.setTextColor(35, 45, 40);
+  };
+
+  const addList = (items: string[]) => {
+    items.forEach((item) => addParagraph(`- ${item}`));
+  };
+
+  const input = result.soilClimateInput;
+  const crop = result.cropAnalysis;
+  const nutrients = result.nutrientAnalysis;
+  const fertilizer = result.fertilizerRecommendation;
+  const calendar = result.cropCalendar;
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(19);
+  pdf.setTextColor(5, 110, 73);
+  pdf.text("SmartAgriCare Farm Plan", margin, y);
+  y += 8;
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+  pdf.setTextColor(95, 105, 100);
+  pdf.text(`Generated ${new Date().toLocaleString()}`, margin, y);
+  y += 8;
+  pdf.setTextColor(35, 45, 40);
+
+  addSection("Executive summary");
+  addParagraph(result.coordinatorSynthesis.summary);
+  addParagraph(`Soil health score: ${result.coordinatorSynthesis.soilHealthScore}/100`);
+  addParagraph(`Coordinator insight: ${result.coordinatorSynthesis.insight}`);
+
+  addSection("Recommended crop");
+  addParagraph(`${crop.recommendedCrop}${crop.teluguName ? ` (${crop.teluguName})` : ""} - ${crop.confidence}% confidence`);
+  addParagraph(`Category: ${crop.category} | Season: ${crop.season} | Growth period: ${crop.growthPeriod}`);
+  addParagraph(`Water requirement: ${crop.waterRequirement}`);
+  addParagraph(`Why this crop: ${crop.matchReason}`);
+  if (crop.alternatives.length) {
+    addList(crop.alternatives.map((alternative) => `${alternative.name}: ${alternative.confidence}% match, ${alternative.season}`));
   }
-];
+
+  addSection("Soil and climate inputs");
+  addParagraph(`NPK (kg/ha): N ${input.n}, P ${input.p}, K ${input.k} | pH ${input.ph}`);
+  addParagraph(`Temperature: ${input.temperature} C | Humidity: ${input.humidity}% | Rainfall: ${input.rainfall} mm`);
+  addParagraph(`Crop nutrient targets (kg/ha): N ${nutrients.required.n}, P ${nutrients.required.p}, K ${nutrients.required.k} | Ideal pH ${nutrients.required.phRange}`);
+  addParagraph(`Deficiencies: ${nutrients.deficiencies.join("; ") || "None reported"}`);
+  addParagraph(`Excesses: ${nutrients.excesses.join("; ") || "None reported"}`);
+
+  addSection("Fertilizer recommendation");
+  addParagraph(`Formulation: ${fertilizer.fertilizerType}`);
+  addParagraph(`Recommended dosage: ${fertilizer.dosage}`);
+  addParagraph(`Per acre: Urea ${fertilizer.dosagePerAcre.urea}, DAP ${fertilizer.dosagePerAcre.dap}, MOP ${fertilizer.dosagePerAcre.mop}${fertilizer.dosagePerAcre.micronutrient ? `, Micronutrient ${fertilizer.dosagePerAcre.micronutrient}` : ""}`);
+  addParagraph(`Per hectare: Urea ${fertilizer.dosagePerHectare.urea}, DAP ${fertilizer.dosagePerHectare.dap}, MOP ${fertilizer.dosagePerHectare.mop}`);
+  addParagraph(`Reason: ${fertilizer.reason}`);
+  if (fertilizer.micronutrients) addParagraph(`Micronutrients: ${fertilizer.micronutrients}`);
+  fertilizer.schedule.forEach((stage) => {
+    addParagraph(`${stage.stage} (${stage.timing}) - ${stage.items.join(", ")}. Purpose: ${stage.purpose}`);
+  });
+
+  addSection("Crop calendar");
+  addParagraph(`Estimated sowing: ${calendar.sowingMonth} | Estimated harvest: ${calendar.harvestMonth} | Growth duration: ${calendar.totalGrowthDays} days`);
+  calendar.milestones.forEach((milestone) => {
+    addParagraph(`Day ${milestone.day}: ${milestone.event}. ${milestone.detail}`);
+  });
+
+  addSection("Irrigation plan");
+  calendar.irrigationSchedule.forEach((stage) => {
+    addParagraph(`${stage.stage}: ${stage.frequency}. ${stage.note}`);
+  });
+
+  addSection("Pest watch");
+  calendar.pestAlerts.forEach((alert) => {
+    addParagraph(`${alert.period}: ${alert.pest}. Action: ${alert.action}`);
+  });
+
+  pdf.save(`${crop.recommendedCrop.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-farm-plan.pdf`);
+};
 
 const CropFertilizerIntelligence = ({ hideLayout = false }: { hideLayout?: boolean }) => {
-  const { language, coords, weatherData, weatherLoading } = useApp();
+  const { language, coords, weatherData } = useApp();
   const navigate = useNavigate();
 
   // Soil & Climate Inputs (Entered ONLY once)
@@ -136,13 +275,11 @@ const CropFertilizerIntelligence = ({ hideLayout = false }: { hideLayout?: boole
 
   // Track whether climate fields were auto-filled from live weather
   const [weatherSynced, setWeatherSynced] = useState<boolean>(false);
-  const [weatherFilling, setWeatherFilling] = useState<boolean>(false);
 
   // Flow state
   const [loading, setLoading] = useState<boolean>(false);
   const [analyzingStep, setAnalyzingStep] = useState<number>(0);
   const [result, setResult] = useState<AnalysisResult | null>(null);
-  const [expandedSchedule, setExpandedSchedule] = useState<boolean>(true);
 
   // ── Auto-fill climate fields from live dashboard weather on mount ──
   useEffect(() => {
@@ -163,34 +300,6 @@ const CropFertilizerIntelligence = ({ hideLayout = false }: { hideLayout?: boole
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weatherData?.lastUpdated]);
-
-  // Manual re-sync button handler (reads from AppContext, no extra API call)
-  const handleAutoFillWeather = () => {
-    if (!weatherData) {
-      toast.info("Live weather not available yet. Waiting for data...");
-      return;
-    }
-    setWeatherFilling(true);
-    if (weatherData.temperature !== undefined) setTemperature(Math.round(weatherData.temperature));
-    if (weatherData.humidity !== undefined) setHumidity(Math.round(weatherData.humidity));
-    if (weatherData.rainfall !== undefined) setRainfall(Math.round(weatherData.rainfall));
-    setWeatherSynced(true);
-    toast.success(
-      `Weather synced from ${weatherData.location}: ${Math.round(weatherData.temperature)}°C, ${Math.round(weatherData.humidity)}% humidity, ${weatherData.rainfall} mm rainfall`
-    );
-    setTimeout(() => setWeatherFilling(false), 800);
-  };
-
-  const handleApplyPreset = (presetData: typeof PRESETS[0]["data"]) => {
-    setN(presetData.n);
-    setP(presetData.p);
-    setK(presetData.k);
-    setPh(presetData.ph);
-    setTemperature(presetData.temperature);
-    setHumidity(presetData.humidity);
-    setRainfall(presetData.rainfall);
-    toast.success("Soil and climate preset loaded.");
-  };
 
   // Run Collective Intelligence analysis
   const handleAnalyze = async () => {
@@ -224,8 +333,8 @@ const CropFertilizerIntelligence = ({ hideLayout = false }: { hideLayout?: boole
       } else {
         toast.error(response?.error || "Analysis failed");
       }
-    } catch (err: any) {
-      toast.error(err.message || "Failed to reach intelligence coordinator");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to reach intelligence coordinator");
     } finally {
       clearTimeout(stepTimer1);
       clearTimeout(stepTimer2);
@@ -234,83 +343,26 @@ const CropFertilizerIntelligence = ({ hideLayout = false }: { hideLayout?: boole
     }
   };
 
-  // Voice narration of findings
-  const handleVoiceReadout = () => {
+  const handleDownloadSummary = async () => {
     if (!result) return;
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-      const text = `Crop and Fertilizer Recommendation. Recommended crop is ${result.cropAnalysis.recommendedCrop} with ${result.cropAnalysis.confidence} percent confidence. Recommended fertilizer is ${result.fertilizerRecommendation.fertilizerType}. Dosage: ${result.fertilizerRecommendation.dosage}. Reason: ${result.fertilizerRecommendation.reason}`;
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 0.95;
-      window.speechSynthesis.speak(utterance);
-      toast.info("Reading recommendation aloud...");
-    } else {
-      toast.info("Text-to-speech not supported on this device.");
+    try {
+      await downloadFarmPlanPdf(result);
+      toast.success("Detailed farm plan downloaded.");
+    } catch (err) {
+      console.error("Failed to generate farm plan PDF:", err);
+      toast.error("Could not generate the PDF. Please try again.");
     }
   };
 
   const content = (
     <div className="space-y-5 pb-24 px-1">
-        {/* Header Banner */}
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-800 via-teal-900 to-slate-900 p-5 text-white shadow-elevated">
-          <div className="absolute top-0 right-0 -mt-6 -mr-6 h-36 w-36 rounded-full bg-emerald-400/10 blur-2xl pointer-events-none" />
-          <div className="relative z-10">
-            <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-3 py-1 text-[11px] font-semibold text-emerald-300 border border-emerald-400/30 mb-2.5">
-              <Sparkles className="h-3.5 w-3.5" />
-              <span>{t('collective_intelligence', language)}</span>
-            </div>
-            <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-              <span>{t('crop_fertilizer_title', language)}</span>
-            </h1>
-            <p className="mt-1 text-xs text-emerald-100/80 leading-relaxed">
-              {t('enter_once_desc', language)}
-            </p>
+      {/* Hero background */}
+      <div className="relative -mx-1">
+        <img src={cropFertilizerHero} alt="" className="absolute inset-x-0 top-0 h-40 w-full object-cover" />
+        <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-background/10 via-background/60 to-background" />
+      </div>
 
-            {/* Pipeline Step Tracker */}
-            <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-[10px] text-white/70">
-              <div className="flex items-center gap-1 font-medium text-emerald-300">
-                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-400 text-slate-950 font-bold text-[9px]">1</span>
-                <span>Soil & Climate</span>
-              </div>
-              <ArrowRight className="h-3 w-3 text-white/40" />
-              <div className="flex items-center gap-1 font-medium">
-                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-white font-bold text-[9px]">2</span>
-                <span>Crop Agent</span>
-              </div>
-              <ArrowRight className="h-3 w-3 text-white/40" />
-              <div className="flex items-center gap-1 font-medium">
-                <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-white font-bold text-[9px]">3</span>
-                <span>Fertilizer Agent</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Quick Presets */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Quick Fill Presets</span>
-            {weatherData && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-sky-600 dark:text-sky-400">
-                <span className="h-1.5 w-1.5 rounded-full bg-sky-500 animate-pulse" />
-                Weather synced · {weatherData.location}
-              </span>
-            )}
-          </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {PRESETS.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => handleApplyPreset(p.data)}
-                className="flex items-center gap-2 rounded-xl bg-card border border-border p-2.5 text-left text-xs font-medium text-foreground transition-all hover:border-emerald-500/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 active:scale-95"
-              >
-                <span className="text-lg">{p.emoji}</span>
-                <span className="truncate leading-tight">{p.title}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
+      <div className="relative z-10">
         {/* Unified Input Card (Enter Once) */}
         <div className="rounded-3xl bg-card border border-border p-5 shadow-card space-y-5">
           <div className="flex items-center justify-between border-b border-border pb-3">
@@ -432,123 +484,6 @@ const CropFertilizerIntelligence = ({ hideLayout = false }: { hideLayout?: boole
             </div>
           </div>
 
-          {/* Climate Parameters */}
-          <div className="space-y-3 pt-3 border-t border-border">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
-                <span>🌤️ Environmental & Climate Conditions</span>
-              </h3>
-              {/* Live weather sync badge + button */}
-              <button
-                onClick={handleAutoFillWeather}
-                disabled={weatherFilling || weatherLoading}
-                className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 hover:underline disabled:opacity-50"
-              >
-                <RefreshCw className={`h-3 w-3 ${weatherFilling || weatherLoading ? "animate-spin" : ""}`} />
-                <span>{t('auto_fill_weather', language)}</span>
-              </button>
-            </div>
-
-            {/* Live weather source banner */}
-            {weatherData && weatherSynced && (
-              <div className="flex items-center gap-2 rounded-xl bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-700/40 px-3 py-2 text-xs">
-                <span className="text-base">🌐</span>
-                <div className="flex-1 min-w-0">
-                  <span className="font-semibold text-sky-800 dark:text-sky-300">Live from dashboard weather</span>
-                  <span className="ml-1 text-sky-600 dark:text-sky-400 truncate">
-                    — {weatherData.location}
-                  </span>
-                </div>
-                <span className="shrink-0 text-[10px] font-bold text-sky-600 dark:text-sky-400 bg-sky-100 dark:bg-sky-900/40 px-1.5 py-0.5 rounded-full border border-sky-200 dark:border-sky-700/30">
-                  {weatherData.source || 'Live'}
-                </span>
-              </div>
-            )}
-            {weatherLoading && !weatherData && (
-              <div className="flex items-center gap-2 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-700/40 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-                <RefreshCw className="h-3 w-3 animate-spin shrink-0" />
-                <span>Fetching live weather for climate auto-fill...</span>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {/* Temperature */}
-              <div className="rounded-2xl bg-secondary/50 p-3 space-y-1 border border-border/60">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground flex items-center gap-1">
-                    <Thermometer className="h-3.5 w-3.5 text-amber-500" />
-                    Temp
-                  </span>
-                  <span className="font-bold text-foreground flex items-center gap-1">
-                    {temperature}°C
-                    {weatherSynced && (
-                      <span className="text-[9px] text-sky-500 font-semibold">live</span>
-                    )}
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min="10"
-                  max="45"
-                  step="1"
-                  value={temperature}
-                  onChange={(e) => { setTemperature(Number(e.target.value)); setWeatherSynced(false); }}
-                  className="w-full accent-amber-500"
-                />
-              </div>
-
-              {/* Humidity */}
-              <div className="rounded-2xl bg-secondary/50 p-3 space-y-1 border border-border/60">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground flex items-center gap-1">
-                    <Droplets className="h-3.5 w-3.5 text-sky-500" />
-                    Humidity
-                  </span>
-                  <span className="font-bold text-foreground flex items-center gap-1">
-                    {humidity}%
-                    {weatherSynced && (
-                      <span className="text-[9px] text-sky-500 font-semibold">live</span>
-                    )}
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min="20"
-                  max="98"
-                  step="1"
-                  value={humidity}
-                  onChange={(e) => { setHumidity(Number(e.target.value)); setWeatherSynced(false); }}
-                  className="w-full accent-sky-500"
-                />
-              </div>
-
-              {/* Rainfall */}
-              <div className="rounded-2xl bg-secondary/50 p-3 space-y-1 border border-border/60">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground flex items-center gap-1">
-                    <CloudRain className="h-3.5 w-3.5 text-blue-500" />
-                    Rainfall
-                  </span>
-                  <span className="font-bold text-foreground flex items-center gap-1">
-                    {rainfall} mm
-                    {weatherSynced && (
-                      <span className="text-[9px] text-sky-500 font-semibold">live</span>
-                    )}
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min="150"
-                  max="2000"
-                  step="25"
-                  value={rainfall}
-                  onChange={(e) => { setRainfall(Number(e.target.value)); setWeatherSynced(false); }}
-                  className="w-full accent-blue-500"
-                />
-              </div>
-            </div>
-          </div>
-
           {/* Run Analysis Button */}
           <button
             onClick={handleAnalyze}
@@ -584,66 +519,115 @@ const CropFertilizerIntelligence = ({ hideLayout = false }: { hideLayout?: boole
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="space-y-5"
+              className="flex flex-col gap-5"
             >
-              {/* Coordinator Synthesis Banner */}
-              <div className="rounded-3xl bg-gradient-to-br from-slate-900 via-teal-950 to-emerald-950 text-white p-5 shadow-elevated border border-emerald-500/30">
-                <div className="flex items-start justify-between gap-3">
+              {/* Combined results from the crop, soil, fertilizer, and crop-calendar agents */}
+              <section className="order-4 rounded-3xl border border-emerald-500/20 bg-gradient-to-br from-emerald-50/80 via-card to-teal-50/70 p-5 shadow-card dark:from-emerald-950/30 dark:via-card dark:to-teal-950/20">
+                <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-border pb-3">
                   <div>
-                    <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400 mb-1">
-                      <CheckCircle2 className="h-4 w-4" />
-                      <span>{t('coordinator_synthesis', language)}</span>
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-5 w-5 text-emerald-600" />
+                      <h3 className="font-bold text-base text-foreground">Your Farm Plan Summary</h3>
                     </div>
-                    <h3 className="text-lg font-bold text-white">
-                      Collective Recommendation for {result.cropAnalysis.recommendedCrop}
-                    </h3>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      One view of crop suitability, soil needs, fertilizer, and the growing calendar.
+                    </p>
                   </div>
-
-                  {/* Soil Health Score Meter */}
-                  <div className="flex flex-col items-center bg-white/10 rounded-2xl px-3 py-2 border border-white/10 shrink-0">
-                    <span className="text-[10px] text-emerald-300 uppercase font-semibold">Soil Health</span>
-                    <span className="text-xl font-extrabold text-white">
-                      {result.coordinatorSynthesis.soilHealthScore}
-                      <span className="text-xs font-normal text-white/60">/100</span>
-                    </span>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={handleDownloadSummary}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-3.5 py-2.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-emerald-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
+                  >
+                    <Download className="h-4 w-4" />
+                    Download detailed PDF
+                  </button>
                 </div>
 
-                <p className="mt-3 text-xs leading-relaxed text-emerald-100/90 bg-emerald-500/10 rounded-2xl p-3 border border-emerald-400/20">
-                  💡 {result.coordinatorSynthesis.insight}
+                <p className="mb-4 rounded-2xl border border-emerald-600/15 bg-background/75 p-3 text-sm leading-relaxed text-foreground">
+                  {result.coordinatorSynthesis.insight}
                 </p>
 
-                {/* Actions: Voice & Share */}
-                <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between">
-                  <button
-                    onClick={handleVoiceReadout}
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-300 hover:text-emerald-200"
-                  >
-                    <Volume2 className="h-4 w-4" />
-                    <span>Listen Aloud (Voice)</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (navigator.share) {
-                        navigator.share({
-                          title: `AgroSmart Crop & Fertilizer Plan for ${result.cropAnalysis.recommendedCrop}`,
-                          text: `Recommended Crop: ${result.cropAnalysis.recommendedCrop} (${result.cropAnalysis.confidence}% confidence). Fertilizer: ${result.fertilizerRecommendation.fertilizerType} (${result.fertilizerRecommendation.dosage})`
-                        }).catch(() => {});
-                      } else {
-                        toast.success("Summary copied to clipboard!");
-                        navigator.clipboard.writeText(`Recommended Crop: ${result.cropAnalysis.recommendedCrop}. Fertilizer: ${result.fertilizerRecommendation.dosage}`);
-                      }
-                    }}
-                    className="inline-flex items-center gap-1 text-xs text-white/70 hover:text-white"
-                  >
-                    <Share2 className="h-3.5 w-3.5" />
-                    <span>Share</span>
-                  </button>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  <div className="rounded-2xl border border-border/70 bg-background/80 p-3">
+                    <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                      <Gauge className="h-3.5 w-3.5 text-emerald-600" /> Soil health
+                    </span>
+                    <p className="mt-1 text-lg font-extrabold text-foreground">{result.coordinatorSynthesis.soilHealthScore}<span className="text-xs font-semibold text-muted-foreground"> / 100</span></p>
+                  </div>
+                  <div className="rounded-2xl border border-border/70 bg-background/80 p-3">
+                    <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                      <Sprout className="h-3.5 w-3.5 text-emerald-600" /> Best crop
+                    </span>
+                    <p className="mt-1 truncate text-sm font-extrabold text-foreground">{result.cropAnalysis.recommendedCrop}</p>
+                    <p className="text-[11px] text-muted-foreground">{result.cropAnalysis.confidence}% match</p>
+                  </div>
+                  <div className="rounded-2xl border border-border/70 bg-background/80 p-3">
+                    <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                      <FlaskConical className="h-3.5 w-3.5 text-indigo-600" /> Fertilizer
+                    </span>
+                    <p className="mt-1 line-clamp-2 text-sm font-extrabold text-foreground">{result.fertilizerRecommendation.fertilizerType}</p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                      Per acre: Urea {result.fertilizerRecommendation.dosagePerAcre.urea}, DAP {result.fertilizerRecommendation.dosagePerAcre.dap}, MOP {result.fertilizerRecommendation.dosagePerAcre.mop}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-border/70 bg-background/80 p-3">
+                    <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                      <CalendarDays className="h-3.5 w-3.5 text-teal-600" /> Crop calendar
+                    </span>
+                    <p className="mt-1 text-sm font-extrabold text-foreground">{result.cropCalendar.sowingMonth} - {result.cropCalendar.harvestMonth}</p>
+                    <p className="text-[11px] text-muted-foreground">{result.cropCalendar.totalGrowthDays} day estimate</p>
+                  </div>
                 </div>
-              </div>
+
+                <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                  Crop fit: {result.cropAnalysis.matchReason}
+                </p>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <div className="rounded-2xl border border-border/70 bg-background/80 p-3.5">
+                    <h4 className="mb-2 flex items-center gap-2 text-xs font-bold text-foreground">
+                      <Layers className="h-4 w-4 text-teal-600" /> Soil nutrient check (current / crop target, kg/ha)
+                    </h4>
+                    <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                      {(["n", "p", "k"] as const).map((nutrient) => (
+                        <div key={nutrient} className="rounded-xl bg-secondary/50 p-2">
+                          <span className="font-bold uppercase text-muted-foreground">{nutrient}</span>
+                          <p className="font-bold text-foreground">
+                            {result.nutrientAnalysis.current[nutrient]} / {result.nutrientAnalysis.required[nutrient]}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {result.nutrientAnalysis.deficiencies.length
+                        ? `Priority: ${result.nutrientAnalysis.deficiencies.join("; ")}`
+                        : "No nutrient deficiencies reported."}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-border/70 bg-background/80 p-3.5">
+                    <h4 className="mb-2 flex items-center gap-2 text-xs font-bold text-foreground">
+                      <Droplets className="h-4 w-4 text-sky-600" /> Field actions from the crop calendar
+                    </h4>
+                    <p className="text-xs leading-relaxed text-foreground">
+                      {result.cropCalendar.milestones[0]?.event}: {result.cropCalendar.milestones[0]?.detail}
+                    </p>
+                    {result.cropCalendar.irrigationSchedule[1] && (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Irrigation: {result.cropCalendar.irrigationSchedule[1].stage} - {result.cropCalendar.irrigationSchedule[1].frequency}.
+                      </p>
+                    )}
+                    {result.cropCalendar.pestAlerts[0] && (
+                      <p className="mt-2 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300">
+                        <Bug className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        Watch for {result.cropCalendar.pestAlerts[0].pest} ({result.cropCalendar.pestAlerts[0].period}).
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </section>
 
               {/* 1. RECOMMENDED CROP CARD */}
-              <div className="rounded-3xl bg-card border border-border p-5 shadow-card space-y-4">
+              <div className="order-1 rounded-3xl bg-card border border-border p-5 shadow-card space-y-4">
                 <div className="flex items-center justify-between border-b border-border pb-3">
                   <div className="flex items-center gap-2">
                     <Sprout className="h-5 w-5 text-emerald-600" />
@@ -656,34 +640,27 @@ const CropFertilizerIntelligence = ({ hideLayout = false }: { hideLayout?: boole
                   </span>
                 </div>
 
-                <div className="flex items-center gap-4">
-                  <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500/20 via-teal-500/10 to-emerald-500/30 text-4xl shadow-inner border border-emerald-500/20">
-                    {result.cropAnalysis.emoji}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-xl font-extrabold text-foreground truncate">
-                      {result.cropAnalysis.recommendedCrop}
-                    </h4>
-                    {result.cropAnalysis.teluguName && (
-                      <p className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                        {result.cropAnalysis.teluguName}
-                      </p>
-                    )}
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      <span className="rounded-full bg-emerald-100 dark:bg-emerald-950/60 px-2.5 py-0.5 text-[10px] font-bold text-emerald-800 dark:text-emerald-300">
-                        {result.cropAnalysis.season}
-                      </span>
-                      <span className="rounded-full bg-secondary px-2.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                        {result.cropAnalysis.category}
-                      </span>
-                      <span className="rounded-full bg-sky-100 dark:bg-sky-950/60 px-2 py-0.5 text-[10px] font-medium text-sky-800 dark:text-sky-300">
-                        💧 {result.cropAnalysis.waterRequirement} Water
-                      </span>
-                    </div>
-                  </div>
+                {/* Crop photo */}
+                <div className="overflow-hidden rounded-2xl border border-border">
+                  <img
+                    src={getCropImage(result.cropAnalysis.recommendedCrop)}
+                    alt={result.cropAnalysis.recommendedCrop}
+                    loading="lazy"
+                    className="h-48 w-full object-cover"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xl font-extrabold text-foreground truncate">
+                    {result.cropAnalysis.recommendedCrop}
+                  </h4>
+                  {result.cropAnalysis.teluguName && (
+                    <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                      {result.cropAnalysis.teluguName}
+                    </span>
+                  )}
                 </div>
 
-                {/* Confidence Bar */}
+                {/* Confidence Score */}
                 <div className="space-y-1.5 rounded-2xl bg-secondary/40 p-3 border border-border/50">
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-semibold text-foreground flex items-center gap-1.5">
@@ -702,35 +679,11 @@ const CropFertilizerIntelligence = ({ hideLayout = false }: { hideLayout?: boole
                       className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500"
                     />
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-1 leading-normal">
-                    {result.cropAnalysis.matchReason}
-                  </p>
                 </div>
-
-                {/* Alternative Candidates */}
-                {result.cropAnalysis.alternatives?.length > 0 && (
-                  <div className="pt-2">
-                    <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-2">
-                      Alternative Candidate Crops:
-                    </span>
-                    <div className="grid grid-cols-3 gap-2">
-                      {result.cropAnalysis.alternatives.map((alt) => (
-                        <div
-                          key={alt.name}
-                          className="rounded-xl bg-card border border-border p-2 text-center text-xs"
-                        >
-                          <span className="text-xl block">{alt.emoji}</span>
-                          <span className="font-semibold text-foreground block truncate mt-1">{alt.name}</span>
-                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">{alt.confidence}%</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* 2. NUTRIENT GAP ANALYSIS (Current NPK vs Required NPK) */}
-              <div className="rounded-3xl bg-card border border-border p-5 shadow-card space-y-4">
+              <div className="order-2 rounded-3xl bg-card border border-border p-5 shadow-card space-y-4">
                 <div className="flex items-center justify-between border-b border-border pb-3">
                   <div className="flex items-center gap-2">
                     <Layers className="h-5 w-5 text-teal-600" />
@@ -836,7 +789,7 @@ const CropFertilizerIntelligence = ({ hideLayout = false }: { hideLayout?: boole
               </div>
 
               {/* 3. FERTILIZER RECOMMENDATION AGENT CARD */}
-              <div className="rounded-3xl bg-card border border-border p-5 shadow-card space-y-4">
+              <div className="order-3 rounded-3xl bg-card border border-border p-5 shadow-card space-y-4">
                 <div className="flex items-center justify-between border-b border-border pb-3">
                   <div className="flex items-center gap-2">
                     <FlaskConical className="h-5 w-5 text-indigo-600" />
@@ -849,7 +802,20 @@ const CropFertilizerIntelligence = ({ hideLayout = false }: { hideLayout?: boole
                   </span>
                 </div>
 
-                {/* Fertilizer Type */}
+                {/* Fertilizer Image */}
+                <div className="relative h-48 w-full overflow-hidden rounded-2xl">
+                  <img
+                    src={getFertilizerImage(
+                      result.fertilizerRecommendation.fertilizerType,
+                      result.fertilizerRecommendation.image
+                    )}
+                    alt={result.fertilizerRecommendation.fertilizerType}
+                    loading="lazy"
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+
+                {/* Fertilizer Name */}
                 <div className="rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/40 p-3.5 space-y-1">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-900 dark:text-indigo-300 block">
                     Recommended Fertilizer Formulation:
@@ -859,98 +825,10 @@ const CropFertilizerIntelligence = ({ hideLayout = false }: { hideLayout?: boole
                   </p>
                 </div>
 
-                {/* Fertilizer Dosage */}
-                <div className="rounded-2xl bg-secondary/50 border border-border p-3.5 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-foreground">
-                      📏 {t('recommended_dosage', language)} (Per Acre)
-                    </span>
-                    <span className="text-[10px] font-semibold text-muted-foreground">Standard Field Rate</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    <div className="rounded-xl bg-card p-2 border border-border">
-                      <span className="text-[10px] text-muted-foreground block">Urea (46% N)</span>
-                      <span className="text-xs font-bold text-foreground block mt-0.5">
-                        {result.fertilizerRecommendation.dosagePerAcre.urea}
-                      </span>
-                    </div>
-                    <div className="rounded-xl bg-card p-2 border border-border">
-                      <span className="text-[10px] text-muted-foreground block">DAP (18-46-0)</span>
-                      <span className="text-xs font-bold text-foreground block mt-0.5">
-                        {result.fertilizerRecommendation.dosagePerAcre.dap}
-                      </span>
-                    </div>
-                    <div className="rounded-xl bg-card p-2 border border-border">
-                      <span className="text-[10px] text-muted-foreground block">MOP (60% K)</span>
-                      <span className="text-xs font-bold text-foreground block mt-0.5">
-                        {result.fertilizerRecommendation.dosagePerAcre.mop}
-                      </span>
-                    </div>
-                  </div>
-
-                  {result.fertilizerRecommendation.micronutrients && (
-                    <div className="mt-2 text-[11px] text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 p-2 rounded-xl border border-emerald-500/20">
-                      🌿 <strong>Micronutrients:</strong> {result.fertilizerRecommendation.micronutrients}
-                    </div>
-                  )}
-                </div>
-
-                {/* Reason for Fertilizer Recommendation */}
-                <div className="rounded-2xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-300/70 dark:border-amber-800/40 p-3.5 space-y-1">
-                  <span className="text-xs font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
-                    <span>💡 {t('fertilizer_reason', language)}</span>
-                  </span>
-                  <p className="text-xs text-amber-950/90 dark:text-amber-100/90 leading-relaxed pt-1">
-                    {result.fertilizerRecommendation.reason}
-                  </p>
-                </div>
-
-                {/* Staged Application Schedule */}
-                {result.fertilizerRecommendation.schedule?.length > 0 && (
-                  <div className="space-y-2 pt-2">
-                    <button
-                      onClick={() => setExpandedSchedule(!expandedSchedule)}
-                      className="flex w-full items-center justify-between text-xs font-bold text-foreground hover:text-emerald-600 transition-colors"
-                    >
-                      <span className="flex items-center gap-1.5">
-                        <Calendar className="h-4 w-4 text-emerald-600" />
-                        <span>{t('application_schedule', language)}</span>
-                      </span>
-                      {expandedSchedule ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                    </button>
-
-                    {expandedSchedule && (
-                      <div className="space-y-2 pt-1">
-                        {result.fertilizerRecommendation.schedule.map((stg, i) => (
-                          <div
-                            key={i}
-                            className="rounded-2xl bg-secondary/40 border border-border/60 p-3 text-xs space-y-1.5"
-                          >
-                            <div className="flex items-center justify-between font-semibold text-foreground">
-                              <span>{stg.stage}</span>
-                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                                {stg.timing}
-                              </span>
-                            </div>
-                            <ul className="list-disc list-inside text-muted-foreground space-y-0.5 text-[11px]">
-                              {stg.items.map((item, itemIdx) => (
-                                <li key={itemIdx}>{item}</li>
-                              ))}
-                            </ul>
-                            <p className="text-[10px] text-emerald-800 dark:text-emerald-300 italic pt-0.5">
-                              Goal: {stg.purpose}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
                 {/* Find Nearby Stores CTA */}
                 <div className="pt-2">
                   <button
-                    onClick={() => navigate("/stores")}
+                    onClick={() => navigate("/stores?district=Belagavi")}
                     className="flex w-full items-center justify-center gap-2 rounded-2xl bg-card border-2 border-emerald-600 py-3 px-4 text-xs font-bold text-emerald-700 dark:text-emerald-300 shadow-sm transition-transform active:scale-[0.98] hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
                   >
                     <MapPin className="h-4 w-4 text-emerald-600" />
@@ -961,6 +839,7 @@ const CropFertilizerIntelligence = ({ hideLayout = false }: { hideLayout?: boole
             </motion.div>
           )}
         </AnimatePresence>
+      </div>
       </div>
   );
 

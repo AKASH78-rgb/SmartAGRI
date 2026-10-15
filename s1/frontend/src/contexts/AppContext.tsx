@@ -45,12 +45,16 @@ export const useApp = () => {
 };
 
 const COORDS_MAX_AGE = 10 * 60 * 1000; // 10 minutes
-const FALLBACK_LAT = 17.6868;
-const FALLBACK_LNG = 83.2185;
+const COORDS_STORAGE_KEY = "smartagricare_coords_v2";
+const FALLBACK_LAT = 15.8497; // Belagavi, Karnataka
+const FALLBACK_LNG = 74.4977;
+const MAX_TRUSTED_ACCURACY_M = 8000;
+// No untrusted-GPS city overrides for the Karnataka deployment
+const UNTRUSTED_GPS_CITIES: string[] = [];
 
 function loadCachedCoords(): Coords | null {
   try {
-    const stored = sessionStorage.getItem("smartagricare_coords");
+    const stored = sessionStorage.getItem(COORDS_STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
       if (parsed && Date.now() - parsed.timestamp < COORDS_MAX_AGE) return parsed;
@@ -102,11 +106,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try { localStorage.setItem("smartagricare_lang", lang); } catch { /* quota exceeded */ }
   };
 
-  const setCoords = useCallback((lat: number, lng: number) => {
+  const setCoords = useCallback((lat: number, lng: number, accuracy?: number) => {
+    if (typeof accuracy === 'number' && accuracy > MAX_TRUSTED_ACCURACY_M) {
+      setCoordsState({ lat: FALLBACK_LAT, lng: FALLBACK_LNG, timestamp: Date.now() });
+      setCoordsLoading(false);
+      return;
+    }
     const c: Coords = { lat, lng, timestamp: Date.now() };
     setCoordsState(c);
     setCoordsLoading(false);
-    try { sessionStorage.setItem("smartagricare_coords", JSON.stringify(c)); } catch { /* ignore */ }
+    try { sessionStorage.setItem(COORDS_STORAGE_KEY, JSON.stringify(c)); } catch { /* ignore */ }
   }, []);
 
   // Core weather fetch — always goes to backend which proxies to OWM/Open-Meteo
@@ -119,7 +128,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const targetLng = lng ?? FALLBACK_LNG;
       const data = await weatherAPI.getCurrentWeather(targetLat, targetLng, query);
       if (data && (data.temperature !== undefined || data.location)) {
-        setWeatherData(data);
+        const loc = String(data.location || '').toLowerCase();
+        const patched = UNTRUSTED_GPS_CITIES.some(city => loc.includes(city))
+          ? { ...data, location: 'Belagavi, IN', lat: FALLBACK_LAT, lon: FALLBACK_LNG }
+          : data;
+        setWeatherData(patched);
         setLastFetchedMs(Date.now());
         setLastUpdatedText("Just now");
         setWeatherError(null);
@@ -170,7 +183,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     navigator.geolocation.getCurrentPosition(
       pos => {
         setLocationPermissionDenied(false);
-        setCoords(pos.coords.latitude, pos.coords.longitude);
+        const accuracy = pos.coords.accuracy;
+        if (typeof accuracy === 'number' && accuracy > MAX_TRUSTED_ACCURACY_M) {
+          setCoords(FALLBACK_LAT, FALLBACK_LNG);
+          fetchWeather(FALLBACK_LAT, FALLBACK_LNG);
+          return;
+        }
+        setCoords(pos.coords.latitude, pos.coords.longitude, accuracy);
         fetchWeather(pos.coords.latitude, pos.coords.longitude);
       },
       err => {
@@ -180,7 +199,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCoords(FALLBACK_LAT, FALLBACK_LNG);
         fetchWeather(FALLBACK_LAT, FALLBACK_LNG);
       },
-      { timeout: 8000, enableHighAccuracy: false }
+      { timeout: 15000, enableHighAccuracy: true, maximumAge: 0 }
     );
   }, [fetchWeather, setCoords]);
 
@@ -206,8 +225,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         navigator.geolocation.getCurrentPosition(
           pos => {
             setLocationPermissionDenied(false);
-            setCoords(pos.coords.latitude, pos.coords.longitude);
-            // Re-fetch with actual GPS coords
+            const accuracy = pos.coords.accuracy;
+            if (typeof accuracy === 'number' && accuracy > MAX_TRUSTED_ACCURACY_M) {
+              setCoords(FALLBACK_LAT, FALLBACK_LNG);
+              fetchWeather(FALLBACK_LAT, FALLBACK_LNG);
+              return;
+            }
+            setCoords(pos.coords.latitude, pos.coords.longitude, accuracy);
             fetchWeather(pos.coords.latitude, pos.coords.longitude);
           },
           err => {
@@ -215,9 +239,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             setLocationPermissionDenied(true);
             setCoordsLoading(false);
             setCoords(FALLBACK_LAT, FALLBACK_LNG);
-            // Already fetched with fallback above — no need to re-fetch
           },
-          { timeout: 8000, enableHighAccuracy: false }
+          { timeout: 15000, enableHighAccuracy: true, maximumAge: 0 }
         );
       } else {
         setLocationPermissionDenied(true);

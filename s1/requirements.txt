@@ -1,0 +1,7 @@
+flask
+flask-cors
+tensorflow-cpu==2.15.0
+h5py
+numpy
+Pillow
+gunicorn
